@@ -4,9 +4,9 @@
 > against a real multiworld: please report anything odd. **CleriaCore is not public yet**, so this
 > mod can't be played until it is.
 >
-> **Download:** grab `ysorigin.archipelago-<version>.zip` from the
-> [Releases](https://github.com/4rtefakt/ys-origin-cleriacore-ap/releases) page and drop the zip as-is
-> into CleriaCore's mods folder (see *Install*).
+> **Download:** grab `ysorigin.archipelago-<version>.cleriamod` from the
+> [Releases](https://github.com/4rtefakt/ys-origin-cleriacore-ap/releases) page and double-click it
+> (see *Install*). The `.zip` there is the same mod for dropping into the mods folder by hand.
 
 Play Ys Origin in an [Archipelago](https://archipelago.gg) multiworld with
 CleriaCore (the clean-room Ys Origin engine). This mod is the
@@ -27,13 +27,17 @@ unchanged: generate and host the seed with that apworld, then connect with this 
 
 ## Install
 
-1. Drop the release zip (or this repository's files in a folder) into CleriaCore's **mods folder**:
-   `Saved Games\CleriaCore\mods` (F1 > Mods > *Open mods folder* opens it).
-2. **F1 > Mods**: select **Archipelago**, open it, set **Enabled** to On, and restart CleriaCore.
-3. **F1 > Mods > Archipelago**: enter the **Server** (e.g. `archipelago.gg:38281`; `ws://` or `wss://`
+1. **Double-click `ysorigin.archipelago-<version>.cleriamod`.** CleriaCore installs the mod and turns it on
+   (an older version is replaced); if CleriaCore was already running, restart it. Or, in CleriaCore:
+   F1 > Mods > *Install a mod file...*.
+   - Without the `.cleriamod`: drop this folder (or a `.zip` of it) into CleriaCore's **mods folder**,
+     `Saved Games\CleriaCore\mods` (F1 > Mods > *Open mods folder* opens it), then **F1 > Mods**: select
+     **Archipelago**, open it, set **Enabled** to On, and restart CleriaCore.
+   - The `.cleriamod` is made from this folder by CleriaCore's `tools/pack_mod.py samples/mods/archipelago_lua`.
+2. **F1 > Mods > Archipelago**: enter the **Server** (e.g. `archipelago.gg:38281`; `ws://` or `wss://`
    may be given, otherwise the secure connection is tried first), your **Slot name** and the
    **Password** if the room has one, then **Connect**. *Connect at start* reconnects by itself next time.
-4. Start a New Game with the seed's character, or load a save of that seed. A save is stamped with
+3. Start a New Game with the seed's character, or load a save of that seed. A save is stamped with
    the seed the first time it is played connected; save at the goddess statues as usual. The
    Archipelago state rides in the `yso_NN.cleria` file beside each save (the save itself stays a
    retail save).
