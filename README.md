@@ -1,7 +1,7 @@
 # Archipelago for Ys Origin (a CleriaCore mod)
 
-> **Status: 0.1.0, early.** Tested end to end against a scripted local Archipelago server, not yet
-> against a real multiworld: please report anything odd. **CleriaCore is not public yet**, so this
+> **Status: 0.2.0, early.** Tested end to end against a scripted local Archipelago server, not yet
+> against a real multiworld: please report anything odd. Made for **Ys Origin apworld 2.0.1 or newer**. **CleriaCore is not public yet**, so this
 > mod can't be played until it is.
 >
 > **Download:** grab `ysorigin.archipelago-<version>.cleriamod` from the
@@ -16,7 +16,8 @@ Archipelago-specific.
 
 It plays seeds of the **Ys Origin apworld** by 4rtefakt,
 [github.com/4rtefakt/ys-origin-archipelago](https://github.com/4rtefakt/ys-origin-archipelago),
-unchanged: generate and host the seed with that apworld, then connect with this mod.
+unchanged: generate and host the seed with that apworld (2.0.1 or newer: its item and location table
+is the one in `data/ys_origin.json`), then connect with this mod.
 
 ## Requirements
 
@@ -58,6 +59,18 @@ beside `cleria.ini`.
   progressive gear / skills / blessings, gems, statue unlocks), never into a cutscene, and never twice
   (the received index is saved with the game, so reloading an older save re-grants exactly what it
   missed).
+- **Roda Fruit** that cannot be wasted: the Roos can be fed in any order, so the count is kept at "Roos
+  still unfed among the ones you have fruits for" (the seed's `roo_flags`). Feeding a late Roo first never
+  starves an early one that logic promised.
+- **Random start**: a New Game of a `random_start` seed is warped once to the seed's start statue, which
+  is lit so it saves and warps.
+- **Story repairs** (Yunica): the post-Kishgal "I'm just a burden" state on 1F and a stuck Dreaming Idol
+  chain are detected and put right, as in the retail mod.
+- **Withheld items**: when a story scene "gives" an item the seed moved elsewhere (the Zelkarons charging
+  the Evil Ring), the feed says the game's own copy was withheld.
+- **Invariants**: a key item never counts above 1 (the scripts test for exactly 1) and a skill level
+  never goes above 3. A weapon tier the seed did not grant is taken back (the 4F Roo's reward raises the
+  weapon with no item behind it).
 - **Traps**: EXP Leech, Chaos Warp, Butterfingers, Blinding Fog.
 - **DeathLink** (option, or on when the seed has it): your deaths are sent, theirs kill you (not during
   a story duel).
@@ -70,13 +83,15 @@ beside `cleria.ini`.
 
 | option | |
 |---|---|
-| `character`, `goal`, `death_link`, `location_signals` / `location_detect`, `suppress_items`, `suppress_give_ids`, `item_index`, `skill_grants`, `sp_items`, `progressive_gear` / `progressive_skills` / `progressive_blessings`, `start_items` / `start_weapon` / `start_level`, `level_scaling` and its EXP keys (`level_margin`, `exp_base_mult`, `exp_catchup_mult`, `exp_catchup_margin`, `scene_levels`), `scene_floors`, `scene_names`, `statue_warp_locks` + `statue_unlocks` + `start_statue_scene` | supported |
-| `random_start` (the start-statue warp after the intro) | **not supported** (listed on the page when the seed has it) |
+| `character`, `goal`, `death_link`, `location_signals` / `location_detect`, `suppress_items`, `suppress_give_ids`, `item_index`, `skill_grants`, `sp_items`, `progressive_gear` / `progressive_skills` / `progressive_blessings`, `start_items` / `start_weapon` / `start_level`, `level_scaling` and its EXP keys (`level_margin`, `exp_base_mult`, `exp_catchup_mult`, `exp_catchup_margin`, `scene_levels`), `scene_floors`, `scene_names`, `statue_warp_locks` + `statue_unlocks` + `start_statue_scene`, `random_start`, `roo_flags` | supported |
 | `blessing_items` (the purchase is the check, the effect becomes an item) | **not supported**: the purchase still checks, but the vanilla effect is also given |
 | `blessing_costs`, `blessing_vanilla_price_map`, `blessing_shop_unlock`, `shop_hints` | **not supported** (the shop's prices and pacing stay vanilla) |
 | `weapon_requirements`, `item_tiers`, `scene_locations`, `floor_locations`, `blessing_names` | logic / tracker data; not needed by the client |
 
-For now, generate with `random_start`, `blessing_items` and shuffled blessing costs off.
+For now, generate with `blessing_items` and shuffled blessing costs off.
+
+Not here yet: the retail mod's autosave after a check or a received item (CleriaCore's mod API has
+no "save now" call yet).
 
 ## Files
 

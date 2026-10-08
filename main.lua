@@ -288,6 +288,11 @@ cleria.content.add_filter(function(q)
     if q.kind == "store" then
         if (not chest or ap_chest) and A.logic:suppress_store(q.index, q.old, q.value) then
             log(string.format("suppressed g_flags[0x%X] %d -> %d (%s)", q.index, q.old, q.value, key))
+            -- an inventory item (not the skill powers or the drained ring that ride along) swallowed outside
+            -- a chest: if no check comes with it, the scene's "you got it" is a lie (withheld_notice)
+            if not chest and q.index >= 0x48 and q.index <= 0x73 and q.index ~= 0x5E then
+                A.withheld = {index = q.index, tick = A.ticks}
+            end
             return "suppress"
         end
         local f = A.logic:on_store(q.index, q.old, q.value)
@@ -360,6 +365,22 @@ local function grant_pending()
     if any then store_state() end
 end
 
+-- A story beat that hands over a pool item (the Zelkarons "charging" the Evil Ring) still plays its dialogue
+-- while the store is swallowed. A chest is fine: its check fires in the same script and the box says what was
+-- there. When a swallowed store has no check around it and the player still lacks the item, say so
+-- [MOD report_withheld]. [H] 4 s either side.
+local kWithheldTicks = 4 * 60
+local function withheld_notice()
+    local w = A.withheld
+    if not w or A.ticks - w.tick < kWithheldTicks then return end
+    A.withheld = nil
+    if A.fired_tick > 0 and math.abs(A.fired_tick - w.tick) <= kWithheldTicks then return end   -- a check: the box told
+    if G.flag(w.index) >= 1 then return end                                                    -- already owned
+    local name = G.item_name(w.index) or string.format("item 0x%X", w.index)
+    log("withheld: told the player about " .. name)
+    feed_text("The game's own " .. name .. " is withheld: yours comes from the multiworld.", 0xE6B040)
+end
+
 cleria.events.on("room_enter", function(e)
     A.room = e.room
     A.chests = G.chests()
@@ -426,7 +447,21 @@ cleria.events.on("tick", function()
         report(A.logic:sweep(), "sweep")                    -- flags set behind the VM (a safety net)
         if connected() and not frozen then grant_pending() end   -- never into a cutscene
         if A.butter_t <= 0 then A.logic:enforce() end
+        local fixed = A.logic:repair(A.logic.scene, A.ticks)
+        if fixed then log("repair: " .. fixed) end
+        withheld_notice()
         if not frozen then
+            -- random start: the first time a new game stands in a real room, go to the seed's start statue
+            if A.logic.st.started and A.logic.scene >= 1000 and A.logic.scene <= 6999 then
+                local w, sc = A.logic:spawn_warp()
+                if w then
+                    G.set_warp_unlocked(w, true)
+                    A.logic:spawn_done(sc)
+                    log("random start: warp to S_" .. sc .. " (warp " .. w .. ")")
+                    G.warp_to(w)
+                    store_state()
+                end
+            end
             local lv = A.logic:level_floor(cleria.player.level())
             if lv > 0 then
                 cleria.player.set_level(lv)
