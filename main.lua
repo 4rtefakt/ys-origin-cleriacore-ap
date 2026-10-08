@@ -25,10 +25,16 @@ local cfg = {
     uuid = S.get("Uuid", ""), death_link = S.get("DeathLink", false), auto_connect = S.get("AutoConnect", false),
     show_status = S.get("ShowStatus", true), show_feed = S.get("ShowFeed", true), show_tracker = S.get("ShowTracker", false),
     export_state = S.get("ExportState", true),
+    -- quality of life (each off or neutral by default unless it only adds information)
+    show_room = S.get("ShowRoom", false), room_spoil = S.get("RoomSpoilers", false), tracker_mode = S.get("TrackerMode", 1),
+    boss_on_kill = S.get("BossOnKill", false), notice_prog = S.get("NoticeProgression", true),
+    hint_alerts = S.get("HintAlerts", true), exp_mult = S.get("ExpMultiplier", 0),
 }
 local cfg_keys = {server = "Server", slot = "Slot", password = "Password", uuid = "Uuid", death_link = "DeathLink",
                   auto_connect = "AutoConnect", show_status = "ShowStatus", show_feed = "ShowFeed",
-                  show_tracker = "ShowTracker", export_state = "ExportState"}
+                  show_tracker = "ShowTracker", export_state = "ExportState", show_room = "ShowRoom",
+                  room_spoil = "RoomSpoilers", tracker_mode = "TrackerMode", boss_on_kill = "BossOnKill",
+                  notice_prog = "NoticeProgression", hint_alerts = "HintAlerts", exp_mult = "ExpMultiplier"}
 local function persist(k) S.set(cfg_keys[k], cfg[k]) end
 
 -- ---- the runtime state ---------------------------------------------------------------------------------------
@@ -38,6 +44,7 @@ local A = {
     death_pending = false, death_from = "", death_cause = "", death_at = -100, death_ours = false, death_ours_tick = 0,
     fog_t = 0, butter_t = 0, butter_tier = 0, chaos_pending = 0, leech_pending = 0,
     feed = {}, log = {}, state_dirty = true, state_at = -10, rng = 0xA9,
+    hints = {}, chat_text = "", hint_text = "",
 }
 
 local function log(s)
@@ -128,6 +135,7 @@ local function sync_save()
                 c:check_locations(ids)
             end
             if not st.started then log("slot loadout: " .. tostring(A.logic:start_loadout())) end
+            A.logic.boss_on_kill = cfg.boss_on_kill
             report(A.logic:on_scene(ys.scene_number(A.room)), "room")
             local want, playing = A.logic.opt.character, G.character()
             if want >= 0 and playing >= 1 and want + 1 ~= playing then
@@ -205,7 +213,45 @@ local function on_connected()
     for _, r in ipairs(A.logic.regs) do ids[#ids + 1] = r.id end
     c:scout_locations(ids)   -- what every location holds, for the treasure box [MOD hook_ap.cpp:1754]
     if death_link_on() and not c:has_tag("DeathLink") then c:set_tags({"DeathLink"}) end
+    -- this slot's hints: the server keeps them under a read-only key and tells us when it changes
+    local key = "_read_hints_" .. c.team .. "_" .. c.slot
+    A.hint_key, A.hints = key, {}
+    c:queue({cmd = "Get", keys = J.array({key})})
+    c:queue({cmd = "SetNotify", keys = J.array({key})})
     sync_save()
+end
+
+-- the server's hint list -> A.hints (unfound first), names resolved
+local function read_hints(v)
+    local c = A.session.client
+    local out = {}
+    for _, h in ipairs(type(v) == "table" and v or {}) do
+        if type(h) == "table" and math.type(h.location) and math.type(h.item) then
+            out[#out + 1] = {location = h.location, item = h.item, finder = h.finding_player or 0, receiver = h.receiving_player or 0,
+                             found = h.found == true, flags = math.type(h.item_flags) and h.item_flags or 0}
+        end
+    end
+    table.sort(out, function(a, b) if a.found ~= b.found then return not a.found end return a.location < b.location end)
+    for _, h in ipairs(out) do
+        h.item_name = c:item_name(h.item, h.receiver)
+        h.location_name = c:location_name(h.location, h.finder)
+        h.finder_name, h.receiver_name = c:player_name(h.finder), c:player_name(h.receiver)
+    end
+    A.hints = out
+    log("hints: " .. #out)
+end
+
+-- entering a room that holds a hinted item of ours to find
+local function hint_alert(sc)
+    if not cfg.hint_alerts or not connected() then return end
+    local c = A.session.client
+    for _, h in ipairs(A.hints) do
+        local l = tbl.loc[h.location]
+        if not h.found and h.finder == c.slot and l and l.scene == sc and not A.logic.st.checks[h.location] then
+            feed_text("Hinted here: " .. h.item_name .. (h.receiver == c.slot and "" or " for " .. h.receiver_name) ..
+                      " (" .. (l.room or h.location_name) .. ")", 0xF2EA8C)
+        end
+    end
 end
 
 local function handle(e)
@@ -236,6 +282,11 @@ local function handle(e)
             A.death_pending, A.death_from, A.death_cause = true, e.source, e.text
             log("deathlink from " .. e.source .. (e.text == "" and "" or ": " .. e.text))
         end
+    elseif k == "Retrieved" then
+        local keys = type(e.data.keys) == "table" and e.data.keys or {}
+        if A.hint_key and keys[A.hint_key] ~= nil then read_hints(keys[A.hint_key]) end
+    elseif k == "SetReply" then
+        if A.hint_key and e.data.key == A.hint_key then read_hints(e.data.value) end
     elseif k == "InvalidPacket" then log("server: invalid packet: " .. e.text)
     elseif k == "ProtocolError" then log("protocol error: " .. e.text)
     end
@@ -353,6 +404,10 @@ local function grant_pending()
         st.applied = st.applied + 1
         any = true
         log("grant #" .. index .. " " .. g.text .. " (from " .. c:player_name(it.player) .. ")")
+        if cfg.notice_prog and index >= A.live_from and it.flags & client.kProgression ~= 0 and not g.trap then
+            cleria.notice(c:item_name(it.item, c.slot) .. (it.player == c.slot and "" or "  (from " .. c:player_name(it.player) .. ")"),
+                          "Archipelago")
+        end
         if g.trap then
             if index < A.live_from then log("trap " .. g.trap .. " arrived while away: skipped")   -- [H] like the mod's replay rule
             else run_trap(g.trap) end
@@ -385,7 +440,9 @@ cleria.events.on("room_enter", function(e)
     A.room = e.room
     A.chests = G.chests()
     if not active() then return end
+    A.logic.boss_on_kill = cfg.boss_on_kill
     report(A.logic:on_scene(ys.scene_number(e.room)), "room")
+    hint_alert(ys.scene_number(e.room))
 end)
 
 cleria.events.on("death", function()
@@ -401,7 +458,12 @@ cleria.events.on("death", function()
     log("deathlink sent")
 end)
 
-cleria.game.exp_factor(function(level) return active() and A.logic:exp_factor(level) or 1 end)
+-- the EXP of a kill: the player's own multiplier when set (the page), else the seed's
+cleria.game.exp_factor(function(level)
+    if not active() then return 1 end
+    if cfg.exp_mult > 0 then return cfg.exp_mult end
+    return A.logic:exp_factor(level)
+end)
 cleria.speedrun.modification(function()
     if A.session.status ~= "idle" or A.logic.st.seed ~= "" then return "Archipelago session" end
 end)
@@ -444,6 +506,7 @@ cleria.events.on("tick", function()
         if A.butter_t == 0 then cleria.player.set_weapon_tier(A.butter_tier) end
     end
     if active() then
+        A.logic.boss_on_kill = cfg.boss_on_kill
         report(A.logic:sweep(), "sweep")                    -- flags set behind the VM (a safety net)
         if connected() and not frozen then grant_pending() end   -- never into a cutscene
         if A.butter_t <= 0 then A.logic:enforce() end
@@ -523,7 +586,8 @@ end)
 cleria.command("apopt", function(args)
     local k, v = args:match("^(%w+)=(.*)$")
     local on = v ~= nil and v ~= "0"
-    local map = {ShowFeed = "show_feed", ShowTracker = "show_tracker", ShowStatus = "show_status", DeathLink = "death_link"}
+    local map = {ShowFeed = "show_feed", ShowTracker = "show_tracker", ShowStatus = "show_status", DeathLink = "death_link",
+                 BossOnKill = "boss_on_kill", ShowRoom = "show_room"}
     if k and map[k] then cfg[map[k]] = on end
 end)
 cleria.command("apstate", function()

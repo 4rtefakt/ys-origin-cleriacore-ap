@@ -79,6 +79,23 @@ beside `cleria.ini`.
 - **Seed guard**: a save of one seed refuses a room of another seed; offline, a stamped save keeps its
   seed's rules from the cached slot_data.
 
+## Quality of life (all optional: F1 > Mods > Archipelago)
+
+| option | default | |
+|---|---|---|
+| **Left in this room** | off | An overlay, bottom left: the current room's locations still to find. A hinted one shows its item. |
+| ...with what they hold | off | The same list with the item at each location (a spoiler). |
+| **Tracker detail** | Areas | The tracker overlay counts per area of the tower, or per floor. |
+| **Boss checks on defeat** | off | A boss room's check is sent when the fight is won, not when you walk in (the floor bosses and the duels; the 17F and 20F rooms stay on entry). |
+| **Progression notices** | on | A notice card when a progression item arrives. |
+| **Hint alerts** | on | A feed line when you enter a room that holds a hinted item. |
+| **EXP multiplier** | 0 | Your own multiplier for every kill; 0 keeps the seed's. |
+
+The page also has: your **hints** (the server's list, kept up to date) with a field to ask for one and your
+hint points; a **chat / command** line with Send, and **Release** / **Collect** buttons once the goal is
+complete; and under *This game*, whether you hold the three **elemental skills** the final fight needs, the
+**floor bosses** beaten when the seed's goal asks for them, and how many locations are left in the room.
+
 ## slot_data options
 
 | option | |

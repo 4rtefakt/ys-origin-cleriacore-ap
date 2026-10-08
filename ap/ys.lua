@@ -13,6 +13,12 @@ local kBlessFlag, kWeaponFlag, kRodaFruit = 217, 148, 0x57
 local kWarpScenes = {1000, 1009, 1011, 2000, 2013, 2100, 2012, 3000, 3006, 3015, 3014,
                      4000, 4104, 4020, 5000, 5010, 5014, 6000, 6010, 6082, 6053, 7000}
 
+-- the flag each boss room's fight sets when it is won (the shipped scripts: the six floor bosses' brains set
+-- 220..224, the duels' BATTLE_* scripts 230 / 231 / 232 / 235 / 236). S_4080 and S_5080 have none: their
+-- checks stay on entry.
+local kBossFlag = {[1099] = 220, [2099] = 221, [3099] = 222, [4099] = 223, [5099] = 224,
+                   [1080] = 230, [2080] = 231, [3080] = 232, [6080] = 235, [6099] = 236}
+
 local G, P = cleria.game, cleria.player
 
 local function to_int(v, def)
@@ -211,11 +217,13 @@ function M.logic() return setmetatable({st = M.new_state(), configured = false, 
 function Logic:configure(sd, table_)
     self.tbl = table_
     self.opt = parse_slot_options(sd)
-    self.regs, self.by_id, self.by_scene, self.by_floor = {}, {}, {}, {}
+    self.regs, self.by_id, self.by_scene, self.by_floor, self.by_room = {}, {}, {}, {}, {}
     local function add(r)
         if self.by_id[r.id] then return end
         self.regs[#self.regs + 1] = r
         self.by_id[r.id] = r
+        local l = table_.loc[r.id]   -- the room a location is in, for the "left in this room" list
+        if l and l.scene > 0 then local t = self.by_room[l.scene] or {} t[#t + 1] = r self.by_room[l.scene] = t end
         if r.detect == "scene" then local l = self.by_scene[r.scene] or {} l[#l + 1] = r self.by_scene[r.scene] = l end
         if r.detect == "floor" then local l = self.by_floor[r.floor] or {} l[#l + 1] = r self.by_floor[r.floor] = l end
     end
@@ -248,6 +256,24 @@ end
 
 function Logic:reg(id) return self.by_id[id] end
 
+-- "Boss checks on defeat" (the mod's option): a boss room's check waits for the fight's flag instead of
+-- firing at the door. Boss locations are excluded from progression in the apworld, so this is never out
+-- of logic.
+function Logic:boss_flag(r)
+    if not self.boss_on_kill or r.detect ~= "scene" then return nil end
+    local l = self.tbl and self.tbl.loc[r.id]
+    return (l and l.type == "boss") and kBossFlag[r.scene] or nil
+end
+
+-- the active locations of a room that are still to find
+function Logic:left_in_room(sc)
+    local out = {}
+    for _, r in ipairs(self.by_room[sc] or {}) do
+        if not self.st.checks[r.id] then out[#out + 1] = r end
+    end
+    return out
+end
+
 function Logic:fire(id, out)
     self.st.claimed[id] = nil
     if self.st.checks[id] then return end
@@ -269,6 +295,15 @@ function Logic:sweep()
             if on then st.checks[r.id] = true out[#out + 1] = r.id end
         end
     end
+    if self.boss_on_kill then
+        for sc, flag in pairs(kBossFlag) do
+            if G.flag(flag) >= 1 then
+                for _, r in ipairs(self.by_scene[sc] or {}) do
+                    if self:boss_flag(r) and not st.checks[r.id] then st.checks[r.id] = true out[#out + 1] = r.id end
+                end
+            end
+        end
+    end
     return out
 end
 
@@ -281,7 +316,9 @@ function Logic:on_scene(sc)
     if (sc >= 1000 and sc <= 6999) or (sc >= 7000 and sc <= 7999 and (P.level() or 0) >= 2) then self.st.saw_gameplay = true end
     local lv = self.opt.scene_levels[sc]
     if lv then self.expected_hi = math.max(self.expected_hi, lv) end
-    for _, r in ipairs(self.by_scene[sc] or {}) do self:fire(r.id, out) end
+    for _, r in ipairs(self.by_scene[sc] or {}) do
+        if not self:boss_flag(r) then self:fire(r.id, out) end   -- else: the sweep, once the fight is won
+    end
     local f = self.opt.scene_floors[sc]
     if f then for _, r in ipairs(self.by_floor[f] or {}) do self:fire(r.id, out) end end
     return out
