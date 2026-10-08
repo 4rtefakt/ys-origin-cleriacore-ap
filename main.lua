@@ -347,6 +347,11 @@ cleria.content.add_filter(function(q)
             return "suppress"
         end
         local f = A.logic:on_store(q.index, q.old, q.value)
+        if #f > 0 and ys.sp_chest[q.index] then   -- an SP chest that is a location: its vanilla SP goes back
+            local back = math.floor(math.min(ys.sp_chest[q.index], cleria.player.sp()))
+            cleria.player.add_sp(-back)
+            log("SP chest: took back the vanilla " .. back .. " SP (" .. key .. ")")
+        end
         if #f > 0 then
             A.fired_script, A.fired_loc, A.fired_tick = q.script, f[#f], A.ticks
             report(f, "store")
@@ -590,6 +595,7 @@ cleria.command("apopt", function(args)
                  BossOnKill = "boss_on_kill", ShowRoom = "show_room"}
     if k and map[k] then cfg[map[k]] = on end
 end)
+cleria.command("apsp", function() cleria.log(string.format("sp = %d", math.floor(cleria.player.sp() or 0))) end)
 cleria.command("apstate", function()
     local c, st = A.session.client, A.logic.st
     cleria.log(string.format("state '%s' seed %s slot %d applied %d/%d checks %d goal %d active %d deathlink %d",

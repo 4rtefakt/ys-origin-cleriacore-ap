@@ -19,6 +19,11 @@ local kWarpScenes = {1000, 1009, 1011, 2000, 2013, 2100, 2012, 3000, 3006, 3015,
 local kBossFlag = {[1099] = 220, [2099] = 221, [3099] = 222, [4099] = 223, [5099] = 224,
                    [1080] = 230, [2080] = 231, [3080] = 232, [6080] = 235, [6099] = 236}
 
+-- the five SP chests: their script pays the SP with 0xB2 AddPlayerSP (pc 32) and then sets the box flag
+-- (pc 35). The grant filter never sees that command, so the vanilla SP came on top of the seed's item:
+-- box flag -> SP paid. S_3003/S_BOX02, S_4003/S_BOX04, S_4015/S_BOX01, S_5002/S_BOX01, S_6014/S_BOX01.
+M.sp_chest = {[470] = 2000, [380] = 5000, [391] = 5000, [447] = 10000, [461] = 20000}
+
 local G, P = cleria.game, cleria.player
 
 local function to_int(v, def)

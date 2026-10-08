@@ -71,6 +71,8 @@ beside `cleria.ini`.
 - **Invariants**: a key item never counts above 1 (the scripts test for exactly 1) and a skill level
   never goes above 3. A weapon tier the seed did not grant is taken back (the 4F Roo's reward raises the
   weapon with no item behind it).
+- **SP chests**: the five chests that pay SP do it with a script command, not an item, so the vanilla SP
+  (2,000 to 20,000) used to come on top of the seed's item. It is taken back when the chest is a location.
 - **Traps**: EXP Leech, Chaos Warp, Butterfingers, Blinding Fog.
 - **DeathLink** (option, or on when the seed has it): your deaths are sent, theirs kill you (not during
   a story duel).

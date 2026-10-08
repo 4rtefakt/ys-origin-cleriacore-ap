@@ -78,6 +78,13 @@ ShowTracker=1
         drive="120:shell=Mods:ysorigin.archipelago;200:lua=apstate;220:quit",
         expect=["goal 0 active 1"],
         absent=["script stopped", "Mod stopped", "attempt to"])),
+    # An SP chest that is a location: the script's AddPlayerSP (not a grant the filter sees) is taken back.
+    "port_sp_chest": (dict(), dict(
+        room="S_40/S_4015/S_4015", aplua={},
+        drive="10:kill1;300:lua=apsp;420:obj=box_01;430:act;740:ok;760:lua=apsp;780:quit",
+        expect=[P + "sp = ", P + "SP chest: took back the vanilla 5000 SP (S_4015/S_BOX01)",
+                "Silent Sands: 15F Room (store)", P + "sp = "],
+        absent=["sp = 5", "sp = 6"])),          # the wallet never shows the chest's 5000
     # The key-item clamp and the skill-level cap.
     "port_invariants": (dict(), dict(
         room="S_10/S_1001/S_1001", aplua={},
