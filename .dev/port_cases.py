@@ -1,0 +1,109 @@
+"""Drive cases for what 0.2.0 added, run through CleriaCore's own harness without touching its tree: a
+scratch copy of the mock server with a patched slot_data fixture, and this mod packed as APLUA_MOD_ZIP.
+
+    python <CleriaCore>/tools/pack_mod.py . -o <tmp>           # then copy the .cleriamod to <tmp>/mod.zip
+    APLUA_MOD_ZIP=<tmp>/mod.zip python .dev/port_cases.py      # CLERIACORE=<checkout> if not ../YsOrigin-CleriaCore
+
+These belong in CleriaCore's tools/aplua_regress.py once its bundled copy of the mod is synced (they need
+roo_flags / random_start in the fixture and extra lines in the mod's settings section)."""
+import json, os, shutil, sys, tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+MOD = os.path.dirname(HERE)
+CC = os.environ.get("CLERIACORE") or os.path.join(os.path.dirname(MOD), "YsOrigin-CleriaCore")
+SCR = os.path.join(tempfile.gettempdir(), "apport_cc_scratch")
+sys.path.insert(0, os.path.join(CC, "tools"))
+import aplua_regress, drive_regress   # noqa: E402
+
+P = aplua_regress.P
+
+
+def fixture(patch):
+    shutil.rmtree(SCR, ignore_errors=True)
+    os.makedirs(os.path.join(SCR, "tools"))
+    os.makedirs(os.path.join(SCR, "tests", "ap"))
+    shutil.copy(os.path.join(CC, "tools", "ap_mock_server.py"), os.path.join(SCR, "tools"))
+    sd = json.load(open(os.path.join(CC, "tests", "ap", "test_slot_data.json"), encoding="utf-8"))
+    sd.update(patch)
+    json.dump(sd, open(os.path.join(SCR, "tests", "ap", "test_slot_data.json"), "w", encoding="utf-8"))
+    d = os.path.join(SCR, "samples", "mods", "archipelago_lua", "data")
+    os.makedirs(d)
+    shutil.copy(os.path.join(MOD, "data", "ys_origin.json"), d)
+    aplua_regress.ROOT = SCR          # only the server path uses it once APLUA_MOD_ZIP is set
+
+
+CASES = {
+    # Roda Fruit derived from roo_flags: 2 received -> 2; the first Roo fed -> 1; a Roo beyond the count
+    # fed (flag 414, the 5th) costs nothing: the script's -1 is refunded.
+    "port_roda": (dict(roo_flags=[312, 339, 362, 388, 414, 458]), dict(
+        room="S_10/S_1001/S_1001", aplua={},
+        drive="60:lua=apsay !give Roda Fruit;100:lua=apsay !give Roda Fruit;160:lua=apflag 0x57;"
+              "170:flag=312,1;200:lua=apflag 0x57;210:flag=87,0;215:flag=414,1;240:lua=apflag 0x57;260:quit",
+        expect=["Roda Fruit: Roda Fruit #1", "Roda Fruit: Roda Fruit #2", P + "flag 0x57 = 2",
+                P + "flag 0x57 = 1", P + "flag 0x57 = 1"])),
+    # Random start: a new game in S_1001 is warped to the seed's start statue once.
+    "port_random_start": (dict(random_start=True, start_statue_scene=1009), dict(
+        room="S_10/S_1001/S_1001", aplua={},
+        drive="300:lua=apstate;320:quit",
+        expect=[P + "random start: warp to S_1009 (warp 1)", ">> entering S_1009"],
+        absent=["not supported: Random start"])),
+    # A vanilla weapon upgrade with no item behind it is clamped to what the seed granted; an ore raises it.
+    "port_weapon_clamp": (dict(), dict(
+        room="S_10/S_1001/S_1001", aplua={},
+        drive="60:flag=148,4;120:lua=apflag 148;130:lua=apsay !give Cleria Ore;200:lua=apflag 148;"
+              "210:flag=148,8;260:lua=apflag 148;280:quit",
+        expect=[P + "flag 0x94 = 0", "Cleria Ore #1: weapon tier 1", P + "flag 0x94 = 1", P + "flag 0x94 = 1"])),
+    # Boss checks on defeat: nothing at the door, the check when the fight's flag is set.
+    "port_boss_on_kill": (dict(), dict(
+        room="S_10/S_1099/S_1099", aplua={}, ini_extra="""BossOnKill=1
+ShowRoom=1
+RoomSpoilers=1
+ShowTracker=1
+TrackerMode=2
+""",
+        drive="120:lua=apstate;130:flag=220,1;200:lua=apstate;220:quit",
+        expect=["goal 0 active 1", "Boss: 5F Velagunder (S_1099) (sweep)", "goal 0 active 1"],
+        absent=["Boss: 5F Velagunder (S_1099) (room)"])),
+    # The same room with the option off: the check at the door (and the overlays drawn every frame).
+    "port_boss_on_entry": (dict(), dict(
+        room="S_10/S_1099/S_1099", aplua={}, ini_extra="""ShowRoom=1
+ShowTracker=1
+""",
+        drive="120:lua=apstate;140:quit",
+        expect=["Boss: 5F Velagunder (S_1099) (room)", "goal 0 active 1"],
+        absent=["script stopped", "Mod stopped"])),
+    # The mod's page drawn (every section, connected and in game) without a script error.
+    "port_page": (dict(goal=1), dict(
+        room="S_10/S_1001/S_1001", aplua={},
+        drive="120:shell=Mods:ysorigin.archipelago;200:lua=apstate;220:quit",
+        expect=["goal 0 active 1"],
+        absent=["script stopped", "Mod stopped", "attempt to"])),
+    # The key-item clamp and the skill-level cap.
+    "port_invariants": (dict(), dict(
+        room="S_10/S_1001/S_1001", aplua={},
+        drive="60:flag=99,3;70:flag=184,5;120:lua=apflag 99;130:lua=apflag 184;150:quit",
+        expect=[P + "flag 0x63 = 1", P + "flag 0xB8 = 3"])),
+}
+
+exe = os.path.join(CC, "build_diff", "Release", "cleria-view.exe")
+assets = os.path.join(CC, "assets")
+_start = aplua_regress.start
+
+
+def start(case, env, settings_dir):          # extra lines for the mod's settings section
+    srv = _start(case, env, settings_dir)
+    if case.get("ini_extra"):
+        with open(os.path.join(settings_dir, "cleria.ini"), "a") as f:
+            f.write(case["ini_extra"])
+    return srv
+
+
+aplua_regress.start = start
+names = sys.argv[1:] or list(CASES)
+fails = 0
+for n in names:
+    patch, case = CASES[n]
+    fixture(patch)
+    fails += not drive_regress.run(n, case, exe, assets)
+print(f"{len(names) - fails}/{len(names)} passed")
+sys.exit(1 if fails else 0)
