@@ -76,7 +76,9 @@ function M.install(A, persist)
         local px = 14.5 * S
         local t = "AP  " .. (A.mismatch == "" and A.session:status_text(cleria.time()) or A.mismatch)
         if s == "connected" and A.logic.configured then
-            t = t .. "  \u{2022}  " .. ys.count(A.logic.st.checks) .. "/" .. #A.logic.regs .. " checks"
+            local done = ys.count(A.logic.st.checks)
+            t = t .. "  \u{2022}  " .. done .. "/" .. #A.logic.regs .. " checks"
+            if A.in_logic then t = t .. "  \u{2022}  " .. done .. "/" .. A.in_logic .. " in logic" end
         end
         local dot = s == "connected" and (A.mismatch == "" and "good" or "warn") or ((s == "refused" or s == "disconnected") and 0xE66050 or "warn")
         local tw = d:text_size(t, {size = px})

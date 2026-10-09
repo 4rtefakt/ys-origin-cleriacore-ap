@@ -223,6 +223,34 @@ function M.state_from_table(t)
 end
 function M.count(set) local n = 0 for _ in pairs(set) do n = n + 1 end return n end
 
+-- The seed's logic as the apworld exports it (slot_data.logic, rules.export_logic): region 0 is the origin,
+-- entrances {from, to, rule}, locations id -> {region, rule}; a rule is true / false, {"has", item, n},
+-- {"reach", region}, {"all", ...} or {"any", ...}. -> the set of location ids in logic with the items `have`.
+function M.in_logic(g, have)
+    local reach = {[0] = true}
+    local function ev(r)
+        if type(r) ~= "table" then return r == true end
+        local k = r[1]
+        if k == "has" then return (have[r[2]] or 0) >= r[3] end
+        if k == "reach" then return reach[r[2]] == true end
+        if k == "all" then for i = 2, #r do if not ev(r[i]) then return false end end return true end
+        if k == "any" then for i = 2, #r do if ev(r[i]) then return true end end return false end
+        return false
+    end
+    local grew = true
+    while grew do
+        grew = false
+        for _, e in ipairs(g.entrances) do
+            if reach[e[1]] and not reach[e[2]] and ev(e[3]) then reach[e[2]], grew = true, true end
+        end
+    end
+    local out = {}
+    for id, l in pairs(g.locations) do
+        if reach[l[1]] and ev(l[2]) then out[tonumber(id)] = true end
+    end
+    return out
+end
+
 -- ---- the logic ---------------------------------------------------------------------------------------------
 local Logic = {}
 Logic.__index = Logic

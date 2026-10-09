@@ -121,6 +121,15 @@ ShowTracker=1
         drive=drive_regress.CLEANSE + ";200:sp=250;210:lua=apflag 152;220:act;290:down;300:ok;390:down;400:ok;480:ok;"
               "570:ok;650:ok;730:ok;820:esc;835:stats;840:quit",
         expect=["sp 250"], absent=["blessing_bought", "not supported: Blessing shop pacing"])),
+    # The "in logic" count from slot_data.logic: two checks made on entry (region 1), a blessing in region 1
+    # that needs an item those checks send (SP: 50), and the statue in a region behind an item never received.
+    "port_in_logic": (dict(logic=dict(regions=["Menu", "A", "B"],
+                                      entrances=[[0, 1, True], [1, 2, ["has", "Nope", 1]]],
+                                      locations={"5857429": [1, True], "5857558": [1, True], "5857587": [2, True],
+                                                 "5857332": [1, ["all", ["reach", 1], ["has", "SP: 50", 2]]]})), dict(
+        room="S_10/S_1001/S_1001", aplua={},
+        drive="300:lua=apstate;320:quit",
+        expect=["checks 2 goal 0 active 1 deathlink 0 in logic 5"])),
     "port_invariants": (dict(), dict(
         room="S_10/S_1001/S_1001", aplua={},
         drive="60:flag=99,3;70:flag=184,5;120:lua=apflag 99;130:lua=apflag 184;150:quit",

@@ -224,6 +224,16 @@ local function on_connected()
         cleria.game.unlock_character(3)
         log("Toal's seed: Character Select offers him for this session")
     end
+    -- the seed's logic for the "in logic" count: in the slot data from apworld 2.0.2, else a file beside the
+    -- slot cache (logic_<seed>_<slot>.json) when someone exported it for an older seed
+    A.graph, A.logic_key = c.slot_data.logic, nil
+    if type(A.graph) ~= "table" then
+        local t = cleria.data.read("logic_" .. c:seed_name() .. "_" .. c.slot .. ".json")
+        A.graph = t and J.decode(t) or nil
+    end
+    if type(A.graph) ~= "table" or type(A.graph.entrances) ~= "table" or type(A.graph.locations) ~= "table" then
+        A.graph = nil
+    end
     -- this seed's saves in their own folder, as the retail mod's archipelago_<seed> (the frame handler sets it)
     A.want_profile = "AP_" .. c:seed_name() .. "_" .. c:player_name(c.slot)
     local f = slot_cache(c:seed_name(), c.slot)
@@ -574,8 +584,29 @@ cleria.events.on("frame", function()
     end
 end)
 
+-- checked / in logic for the status line: what the received items reach, plus what is already checked
+local function count_logic()
+    local c, st = A.session.client, A.logic.st
+    if not A.graph or not A.logic.configured then A.in_logic = nil return end
+    local key = #c.received .. ":" .. ys.count(st.checks)
+    if key == A.logic_key then return end
+    A.logic_key = key
+    local have = {}
+    for _, it in ipairs(c.received) do
+        local n = c:item_name(it.item, c.slot)
+        have[n] = (have[n] or 0) + 1
+    end
+    local set = ys.in_logic(A.graph, have)
+    local n = 0
+    for _, r in ipairs(A.logic.regs) do
+        if set[r.id] or st.checks[r.id] then n = n + 1 end
+    end
+    A.in_logic = n
+end
+
 cleria.events.on("tick", function()
     A.ticks = A.ticks + 1
+    if A.ticks % 30 == 0 then count_logic() end
     if A.fog_t > 0 then A.fog_t = A.fog_t - 1 end
     if not A.in_game or not cleria.save.ready() then write_state() return end
     local frozen = G.frozen()
@@ -679,9 +710,9 @@ end)
 cleria.command("apsp", function() cleria.log(string.format("sp = %d", math.floor(cleria.player.sp() or 0))) end)
 cleria.command("apstate", function()
     local c, st = A.session.client, A.logic.st
-    cleria.log(string.format("state '%s' seed %s slot %d applied %d/%d checks %d goal %d active %d deathlink %d",
+    cleria.log(string.format("state '%s' seed %s slot %d applied %d/%d checks %d goal %d active %d deathlink %d in logic %s",
         A.session:status_text(cleria.time()), st.seed, st.slot, st.applied, #c.received, ys.count(st.checks),
-        st.goal_sent and 1 or 0, active() and 1 or 0, death_link_on() and 1 or 0))
+        st.goal_sent and 1 or 0, active() and 1 or 0, death_link_on() and 1 or 0, tostring(A.in_logic)))
 end)
 
 log("loaded: " .. #tbl.locations .. " locations, " .. #tbl.items .. " items")
