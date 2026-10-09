@@ -349,6 +349,13 @@ cleria.content.add_filter(function(q)
     local chest = A.chests[q.script] ~= nil
     local ap_chest = chest and tbl.chest_loc[key] ~= nil and A.logic:reg(tbl.chest_loc[key]) ~= nil
     if q.kind == "store" then
+        -- An elemental altar zeroes its level cell (S_1004 182, S_2009 183, S_3007 184): "the skill starts at
+        -- level 1". With the skill already received and levelled, visiting the altar threw the level back to 1
+        -- (reported on the retail mod, 2.0.1). Keep the level.
+        if q.index >= 0xB6 and q.index <= 0xB8 and q.value == 0 and q.old > 0 then
+            log(string.format("kept skill level g_flags[0x%X] = %d (the altar's reset dropped, %s)", q.index, q.old, key))
+            return "suppress"
+        end
         if (not chest or ap_chest) and A.logic:suppress_store(q.index, q.old, q.value) then
             log(string.format("suppressed g_flags[0x%X] %d -> %d (%s)", q.index, q.old, q.value, key))
             -- an inventory item (not the skill powers or the drained ring that ride along) swallowed outside
