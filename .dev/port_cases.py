@@ -106,6 +106,14 @@ ShowTracker=1
         expect=["(S_5080) (sweep)"],
         absent=["Boss: Boss Room (S_5080) (room)"])),
     # The key-item clamp and the skill-level cap.
+    # The statue shop (mod API 5): "Increase stationary heal rate" (@Grow00, 1000 SP in vanilla) is sold at the
+    # seed's price for its location, on the row, at the wallet test and at the deduction, and the purchase is its check.
+    "port_shop_price": (dict(blessing_costs={"5857332": 70}), dict(
+        room="S_10/S_1009/S_1009", aplua={},
+        drive=drive_regress.CLEANSE + ";200:sp=250;220:act;290:down;300:ok;390:down;400:ok;480:ok;570:ok;650:ok;"
+              "730:ok;820:esc;835:stats;840:quit",
+        expect=["[content] blessing_bought 0 for 70 SP", "check 5857332 Divine Blessing: Increase stationary heal rate"],
+        absent=["not supported: Shuffled blessing prices"])),
     "port_invariants": (dict(), dict(
         room="S_10/S_1001/S_1001", aplua={},
         drive="60:flag=99,3;70:flag=184,5;120:lua=apflag 99;130:lua=apflag 184;150:quit",

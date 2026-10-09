@@ -169,7 +169,12 @@ local function parse_slot_options(sd)
     o.roo_flags = {}
     for _, f in ipairs(ints(sd.roo_flags)) do if f >= 0 and f < 0x200 then o.roo_flags[#o.roo_flags + 1] = f end end
     if o.blessing_items then o.unsupported[#o.unsupported + 1] = "Blessing items (the shop purchase is not intercepted)" end
-    if type(sd.blessing_costs) == "table" and next(sd.blessing_costs) then o.unsupported[#o.unsupported + 1] = "Shuffled blessing prices" end
+    -- the statue shop's seed prices, location id -> SP (the shop filter of mod API 5 charges them)
+    o.blessing_costs, o.shop_hints = {}, sd.shop_hints ~= false
+    for k, v in pairs(obj(sd.blessing_costs)) do o.blessing_costs[tonumber(k) or -1] = to_int(v, -1) end
+    if next(o.blessing_costs) and not (cleria.shop and cleria.shop.add_filter) then
+        o.unsupported[#o.unsupported + 1] = "Shuffled blessing prices (this CleriaCore has no shop hooks)"
+    end
     if to_int(sd.blessing_shop_unlock, 0) ~= 0 then o.unsupported[#o.unsupported + 1] = "Blessing shop pacing (one per floor)" end
     return o
 end
@@ -364,6 +369,16 @@ function Logic:suppress_store(index, old, value)
     return false
 end
 function Logic:suppress_give(item) return self.opt.suppress_give_ids[item] == true end
+
+-- the location behind a statue-shop row: the script's blessing nn is bit nn (0..6) or nn - 2 (9..25) of
+-- flag 217; 7 / 8 are the armor / leggings rows (their ladder is not re-priced here)
+function Logic:bless_reg(index)
+    local bit = (index >= 0 and index <= 6) and index or (index >= 9 and index <= 25) and index - 2 or -1
+    if bit < 0 then return nil end
+    for _, r in ipairs(self.regs) do
+        if r.detect == "bit" and r.flag == kBlessFlag and r.bit == bit then return r end
+    end
+end
 
 function Logic:claim_cell(index)
     for _, r in ipairs(self.regs) do

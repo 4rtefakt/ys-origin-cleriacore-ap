@@ -407,6 +407,24 @@ cleria.content.add_filter(function(q)
     return d
 end)
 
+-- ---- the statue shop: the seed's prices and what each row holds (mod API 5) ----------------------------------
+if cleria.shop and cleria.shop.add_filter then
+    cleria.shop.add_filter(function(q)
+        if not active() or (q.kind ~= "price" and q.kind ~= "row") then return nil end
+        local r = A.logic:bless_reg(q.index)
+        local price = r and A.logic.opt.blessing_costs[r.id]
+        if not price or price < 0 then return nil end
+        if q.kind == "price" then return {action = "replace", value = price} end
+        if q.value < 0 then return nil end                      -- a "[Done]" row
+        local c = A.session.client
+        local s = A.logic.opt.shop_hints and c.scouted[r.id]
+        if not s then return {action = "replace", text = (q.text:gsub("%d+%s*$", tostring(price)))} end
+        local what = c:item_name(s.item, s.player)
+        if s.player ~= c.slot then what = what .. " (" .. c:player_name(s.player) .. ")" end
+        return {action = "replace", text = what .. " - [SP:]" .. price}
+    end)
+end
+
 -- ---- receiving, per tick -------------------------------------------------------------------------------------
 local function run_trap(t)
     -- [MOD hook_ap.cpp:658-673, 2686-2726]: EXP Leech -1 level, Chaos Warp a random unlocked statue,
