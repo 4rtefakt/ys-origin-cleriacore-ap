@@ -175,7 +175,10 @@ local function parse_slot_options(sd)
     if next(o.blessing_costs) and not (cleria.shop and cleria.shop.add_filter) then
         o.unsupported[#o.unsupported + 1] = "Shuffled blessing prices (this CleriaCore has no shop hooks)"
     end
-    if to_int(sd.blessing_shop_unlock, 0) ~= 0 then o.unsupported[#o.unsupported + 1] = "Blessing shop pacing (one per floor)" end
+    o.shop_unlock = to_int(sd.blessing_shop_unlock, 0)   -- 1: one more shop slot per distinct floor visited
+    if o.shop_unlock ~= 0 and not (cleria.shop and cleria.shop.add_filter) then
+        o.unsupported[#o.unsupported + 1] = "Blessing shop pacing (one per floor)"
+    end
     return o
 end
 
@@ -184,7 +187,7 @@ end
 -- spawned: the random-start warp was done (or is not owed: a save that had already started)
 function M.new_state() return {seed = "", slot_name = "", slot = 0, applied = 0, checks = {}, claimed = {}, goal_sent = false,
                                started = false, saw_gameplay = false, ore = 0, prog = {}, statues = {}, roda = 0,
-                               spawned = false} end
+                               spawned = false, floors = {}} end
 
 local function set_list(s)
     local t = {}
@@ -201,7 +204,8 @@ function M.state_to_table(st)
     if st.seed == "" then return nil end
     return {seed = st.seed, slot = st.slot, slot_name = st.slot_name, applied = st.applied, checks = set_list(st.checks),
             claimed = set_list(st.claimed), goal = st.goal_sent, started = st.started, gameplay = st.saw_gameplay, ore = st.ore,
-            prog = st.prog, statues = set_list(st.statues), roda = st.roda, spawned = st.spawned}
+            prog = st.prog, statues = set_list(st.statues), roda = st.roda, spawned = st.spawned,
+            floors = set_list(st.floors)}
 end
 function M.state_from_table(t)
     local st = M.new_state()
@@ -209,6 +213,7 @@ function M.state_from_table(t)
     st.seed, st.slot, st.slot_name = t.seed, to_int(t.slot, 0), type(t.slot_name) == "string" and t.slot_name or ""
     st.applied = math.max(0, to_int(t.applied, 0))
     st.checks, st.claimed, st.statues = list_set(t.checks), list_set(t.claimed), list_set(t.statues)
+    st.floors = list_set(t.floors)
     st.goal_sent, st.started, st.saw_gameplay = t.goal == true, t.started == true, t.gameplay == true
     st.ore = math.max(0, to_int(t.ore, 0))
     st.roda = t.roda == nil and -1 or math.max(-1, to_int(t.roda, -1))
@@ -341,7 +346,10 @@ function Logic:on_scene(sc)
         if not self:boss_flag(r) then self:fire(r.id, out) end   -- else: the sweep, once the fight is won
     end
     local f = self.opt.scene_floors[sc]
-    if f then for _, r in ipairs(self.by_floor[f] or {}) do self:fire(r.id, out) end end
+    if f then
+        self.st.floors[f] = true   -- the shop's one-per-floor pacing
+        for _, r in ipairs(self.by_floor[f] or {}) do self:fire(r.id, out) end
+    end
     return out
 end
 
@@ -371,13 +379,32 @@ end
 function Logic:suppress_give(item) return self.opt.suppress_give_ids[item] == true end
 
 -- the location behind a statue-shop row: the script's blessing nn is bit nn (0..6) or nn - 2 (9..25) of
--- flag 217; 7 / 8 are the armor / leggings rows (their ladder is not re-priced here)
+-- flag 217; 7 / 8 are the armor / leggings rows, whose location is the equipped piece's upgrade cell
+-- (g_flags 152 / 153 hold the equipped piece's item index [MOD kArmorSelAbs / kBootsSelAbs])
 function Logic:bless_reg(index)
+    if index == 7 or index == 8 then
+        local sel = G.flag(index == 7 and 152 or 153)
+        for _, r in ipairs(self.regs) do
+            if r.detect == "item_arr" and r.index == sel then return r end
+        end
+        return nil
+    end
     local bit = (index >= 0 and index <= 6) and index or (index >= 9 and index <= 25) and index - 2 or -1
     if bit < 0 then return nil end
     for _, r in ipairs(self.regs) do
         if r.detect == "bit" and r.flag == kBlessFlag and r.bit == bit then return r end
     end
+end
+
+-- one_per_floor: the priced slots, cheapest first; slot i is on sale once i distinct floors + 1 were visited.
+-- A slot holding progression is never held back [MOD shop_item_unlocked].
+function Logic:shop_locked(r, progression)
+    if self.opt.shop_unlock ~= 1 or progression or not self.opt.blessing_costs[r.id] then return false end
+    local cost, rank = self.opt.blessing_costs, 0
+    for id, c in pairs(cost) do
+        if c < cost[r.id] or (c == cost[r.id] and id < r.id) then rank = rank + 1 end
+    end
+    return rank >= M.count(self.st.floors)
 end
 
 function Logic:claim_cell(index)

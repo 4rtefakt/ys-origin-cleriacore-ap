@@ -114,6 +114,13 @@ ShowTracker=1
               "730:ok;820:esc;835:stats;840:quit",
         expect=["[content] blessing_bought 0 for 70 SP", "check 5857332 Divine Blessing: Increase stationary heal rate"],
         absent=["not supported: Shuffled blessing prices"])),
+    # one_per_floor: on the first floor visited only the cheapest slot is on sale. The heal rate (70) is the
+    # second cheapest here, so the same purchase as port_shop_price is refused (the wallet test at 1000000).
+    "port_shop_pacing": (dict(blessing_costs={"5857332": 70, "5857339": 60}, blessing_shop_unlock=1), dict(
+        room="S_10/S_1009/S_1009", aplua={},
+        drive=drive_regress.CLEANSE + ";200:sp=250;210:lua=apflag 152;220:act;290:down;300:ok;390:down;400:ok;480:ok;"
+              "570:ok;650:ok;730:ok;820:esc;835:stats;840:quit",
+        expect=["sp 250"], absent=["blessing_bought", "not supported: Blessing shop pacing"])),
     "port_invariants": (dict(), dict(
         room="S_10/S_1001/S_1001", aplua={},
         drive="60:flag=99,3;70:flag=184,5;120:lua=apflag 99;130:lua=apflag 184;150:quit",

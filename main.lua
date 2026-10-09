@@ -412,16 +412,31 @@ if cleria.shop and cleria.shop.add_filter then
     cleria.shop.add_filter(function(q)
         if not active() or (q.kind ~= "price" and q.kind ~= "row") then return nil end
         local r = A.logic:bless_reg(q.index)
-        local price = r and A.logic.opt.blessing_costs[r.id]
-        if not price or price < 0 then return nil end
-        if q.kind == "price" then return {action = "replace", value = price} end
-        if q.value < 0 then return nil end                      -- a "[Done]" row
+        if not r then return nil end
         local c = A.session.client
-        local s = A.logic.opt.shop_hints and c.scouted[r.id]
-        if not s then return {action = "replace", text = (q.text:gsub("%d+%s*$", tostring(price)))} end
-        local what = c:item_name(s.item, s.player)
-        if s.player ~= c.slot then what = what .. " (" .. c:player_name(s.player) .. ")" end
-        return {action = "replace", text = what .. " - [SP:]" .. price}
+        local s = c.scouted[r.id]
+        local gear = q.index == 7 or q.index == 8          -- the armor / leggings ladder keeps its own prices
+        local price = not gear and A.logic.opt.blessing_costs[r.id] or nil
+        if price and price < 0 then price = nil end
+        -- one_per_floor: a slot not yet on sale costs more than the wallet can hold
+        local locked = price and A.logic:shop_locked(r, s and s.flags & 1 == 1)
+        if q.kind == "price" then
+            if locked then return {action = "replace", value = 1000000} end
+            return price and {action = "replace", value = price} or nil
+        end
+        if q.value < 0 then return nil end                      -- a "[Done]" row
+        if locked then return {action = "replace", text = "Locked: visit another floor"} end
+        if not price and not gear then return nil end
+        local what
+        if A.logic.opt.shop_hints and s and not A.logic.st.checks[r.id] then
+            what = c:item_name(s.item, s.player)
+            if s.player ~= c.slot then what = what .. " (" .. c:player_name(s.player) .. ")" end
+        end
+        if not what then
+            if not price then return nil end
+            return {action = "replace", text = (q.text:gsub("%d+%s*$", tostring(price)))}
+        end
+        return {action = "replace", text = what .. " - [SP:]" .. (price or q.value)}
     end)
 end
 
