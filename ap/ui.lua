@@ -53,7 +53,7 @@ function M.install(A, persist)
             if shown >= 6 or now - A.feed[i].t > 10 then break end
             shown = shown + 1
         end
-        local y = d.h * 0.24
+        local y = d.h * 0.05
         for k = #A.feed - shown + 1, #A.feed do
             local f = A.feed[k]
             local a = math.max(0, math.min(1, 10 - (now - f.t)))
@@ -276,8 +276,6 @@ function M.install(A, persist)
             "is won, not when you walk in (the floor bosses, the duels and the 20F ward; the 17F room has no fight and stays on entry). " ..
             "Not a retail option.")
         if changed then persist("boss_on_kill") end
-        cfg.notice_prog, changed = p:toggle("Progression notices", cfg.notice_prog, "A notice card when a progression item arrives.")
-        if changed then persist("notice_prog") end
         cfg.hint_alerts, changed = p:toggle("Hint alerts", cfg.hint_alerts, "A feed line when you enter a room that holds a hinted item.")
         if changed then persist("hint_alerts") end
         cfg.exp_mult, changed = p:slider("EXP multiplier", cfg.exp_mult, 0, 100, 1, "%.0f", "Your own EXP multiplier for every kill. " ..

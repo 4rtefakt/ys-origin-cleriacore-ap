@@ -68,7 +68,7 @@ beside `cleria.ini`.
 - **Story repairs** (Yunica): the post-Kishgal "I'm just a burden" state on 1F and a stuck Dreaming Idol
   chain are detected and put right, as in the retail mod.
 - **Withheld items**: when a story scene "gives" an item the seed moved elsewhere (the Zelkarons charging
-  the Evil Ring), the feed says the game's own copy was withheld.
+  the Evil Ring), the game's own copy is withheld (a line in the mod's log, nothing on screen).
 - **Invariants**: a key item never counts above 1 (the scripts test for exactly 1) and a skill level
   never goes above 3. A weapon tier the seed did not grant is taken back (the 4F Roo's reward raises the
   weapon with no item behind it).
@@ -92,7 +92,6 @@ beside `cleria.ini`.
 | **Autosave** | on | Saves the game by itself after a check, a received item, a door opened with a key or medallion and a Panacea used, at the next safe moment (not in a cutscene, a boss fight or an arena). Needs a CleriaCore with mod API 4; older builds show it greyed. |
 | **Autosave slot** | No.08 | The slot the autosave writes, as numbered in the book. It is overwritten without asking. |
 | **Boss checks on defeat** | off | A boss room's check is sent when the fight is won, not when you walk in (the floor bosses, the duels and the 20F ward; the 17F room has no fight and stays on entry). |
-| **Progression notices** | on | A notice card when a progression item arrives. |
 | **Hint alerts** | on | A feed line when you enter a room that holds a hinted item. |
 | **EXP multiplier** | 0 | Your own multiplier for every kill; 0 keeps the seed's. |
 

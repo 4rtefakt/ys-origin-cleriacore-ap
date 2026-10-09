@@ -27,7 +27,7 @@ local cfg = {
     export_state = S.get("ExportState", true),
     -- quality of life (each off or neutral by default unless it only adds information)
     show_room = S.get("ShowRoom", false), room_spoil = S.get("RoomSpoilers", false), tracker_mode = S.get("TrackerMode", 1),
-    boss_on_kill = S.get("BossOnKill", false), notice_prog = S.get("NoticeProgression", true),
+    boss_on_kill = S.get("BossOnKill", false),
     hint_alerts = S.get("HintAlerts", true), exp_mult = S.get("ExpMultiplier", 0),
     autosave = S.get("Autosave", true), autosave_slot = S.get("AutosaveSlot", 8),
 }
@@ -35,7 +35,7 @@ local cfg_keys = {server = "Server", slot = "Slot", password = "Password", uuid 
                   auto_connect = "AutoConnect", show_status = "ShowStatus", show_feed = "ShowFeed",
                   show_tracker = "ShowTracker", export_state = "ExportState", show_room = "ShowRoom",
                   room_spoil = "RoomSpoilers", tracker_mode = "TrackerMode", boss_on_kill = "BossOnKill",
-                  notice_prog = "NoticeProgression", hint_alerts = "HintAlerts", exp_mult = "ExpMultiplier",
+                  hint_alerts = "HintAlerts", exp_mult = "ExpMultiplier",
                   autosave = "Autosave", autosave_slot = "AutosaveSlot"}
 local function persist(k) S.set(cfg_keys[k], cfg[k]) end
 
@@ -466,10 +466,6 @@ local function grant_pending()
         st.applied = st.applied + 1
         any = true
         log("grant #" .. index .. " " .. g.text .. " (from " .. c:player_name(it.player) .. ")")
-        if cfg.notice_prog and index >= A.live_from and it.flags & client.kProgression ~= 0 and not g.trap then
-            cleria.notice(c:item_name(it.item, c.slot) .. (it.player == c.slot and "" or "  (from " .. c:player_name(it.player) .. ")"),
-                          "Archipelago")
-        end
         if g.trap then
             if index < A.live_from then log("trap " .. g.trap .. " arrived while away: skipped")   -- [H] like the mod's replay rule
             else run_trap(g.trap) end
@@ -495,8 +491,7 @@ local function withheld_notice()
     if A.fired_tick > 0 and math.abs(A.fired_tick - w.tick) <= kWithheldTicks then return end   -- a check: the box told
     if G.flag(w.index) >= 1 then return end                                                    -- already owned
     local name = G.item_name(w.index) or string.format("item 0x%X", w.index)
-    log("withheld: told the player about " .. name)
-    feed_text("The game's own " .. name .. " is withheld: yours comes from the multiworld.", 0xE6B040)
+    log("withheld: the game's own " .. name .. " (the seed's comes from the multiworld)")
 end
 
 cleria.events.on("room_enter", function(e)
@@ -588,7 +583,6 @@ cleria.events.on("tick", function()
             if G.save(slot - 1) then   -- the file number is the book's "No.NN" minus one
                 A.autosave_at = nil
                 log(string.format("autosave: wrote No.%02d", slot))
-                feed_text(string.format("Autosaved to No.%02d", slot), 0x9FD0A0)
             end
         end
         local fixed = A.logic:repair(A.logic.scene, A.ticks)
