@@ -224,6 +224,8 @@ local function on_connected()
         cleria.game.unlock_character(3)
         log("Toal's seed: Character Select offers him for this session")
     end
+    -- this seed's saves in their own folder, as the retail mod's archipelago_<seed> (the frame handler sets it)
+    A.want_profile = "AP_" .. c:seed_name() .. "_" .. c:player_name(c.slot)
     local f = slot_cache(c:seed_name(), c.slot)
     if f then cleria.data.write(f, J.encode(c.slot_data)) end   -- for offline play of this seed's saves
     local ids = {}
@@ -561,6 +563,15 @@ end
 cleria.events.on("frame", function()
     A.session:update(cleria.time())
     for _, e in ipairs(A.session:take_events()) do handle(e) end
+    -- the save profile changes on the launcher and the title only: refused in a game, tried again each second
+    local now = cleria.time()
+    if A.want_profile and cleria.save.set_profile and now - (A.profile_at or -10) >= 1 then
+        A.profile_at = now
+        if cleria.save.set_profile(A.want_profile) then
+            log("saves: profile " .. cleria.save.profile())
+            A.want_profile = nil
+        end
+    end
 end)
 
 cleria.events.on("tick", function()
