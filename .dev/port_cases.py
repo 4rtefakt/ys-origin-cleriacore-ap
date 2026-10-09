@@ -129,7 +129,7 @@ ShowTracker=1
                                                  "5857332": [1, ["all", ["reach", 1], ["has", "SP: 50", 2]]]})), dict(
         room="S_10/S_1001/S_1001", aplua={},
         drive="300:lua=apstate;320:quit",
-        expect=["checks 2 goal 0 active 1 deathlink 0 in logic 5"])),
+        expect=["checks 2 goal 0 active 1 deathlink 0 in logic 3 left 3"])),
     "port_invariants": (dict(), dict(
         room="S_10/S_1001/S_1001", aplua={},
         drive="60:flag=99,3;70:flag=184,5;120:lua=apflag 99;130:lua=apflag 184;150:quit",

@@ -78,7 +78,7 @@ function M.install(A, persist)
         if s == "connected" and A.logic.configured then
             local done = ys.count(A.logic.st.checks)
             t = t .. "  \u{2022}  " .. done .. "/" .. #A.logic.regs .. " checks"
-            if A.in_logic then t = t .. "  \u{2022}  " .. done .. "/" .. A.in_logic .. " in logic" end
+            if A.in_logic then t = t .. "  \u{2022}  " .. done .. "/" .. A.in_logic .. " in logic (" .. A.logic_left .. " left)" end
         end
         local dot = s == "connected" and (A.mismatch == "" and "good" or "warn") or ((s == "refused" or s == "disconnected") and 0xE66050 or "warn")
         local tw = d:text_size(t, {size = px})

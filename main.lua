@@ -584,7 +584,7 @@ cleria.events.on("frame", function()
     end
 end)
 
--- checked / in logic for the status line: what the received items reach, plus what is already checked
+-- for the status line: how many locations the received items reach, and how many of those are still unchecked
 local function count_logic()
     local c, st = A.session.client, A.logic.st
     if not A.graph or not A.logic.configured then A.in_logic = nil return end
@@ -597,11 +597,14 @@ local function count_logic()
         have[n] = (have[n] or 0) + 1
     end
     local set = ys.in_logic(A.graph, have)
-    local n = 0
+    local n, left = 0, 0
     for _, r in ipairs(A.logic.regs) do
-        if set[r.id] or st.checks[r.id] then n = n + 1 end
+        if set[r.id] then
+            n = n + 1
+            if not st.checks[r.id] then left = left + 1 end
+        end
     end
-    A.in_logic = n
+    A.in_logic, A.logic_left = n, left
 end
 
 cleria.events.on("tick", function()
@@ -710,9 +713,9 @@ end)
 cleria.command("apsp", function() cleria.log(string.format("sp = %d", math.floor(cleria.player.sp() or 0))) end)
 cleria.command("apstate", function()
     local c, st = A.session.client, A.logic.st
-    cleria.log(string.format("state '%s' seed %s slot %d applied %d/%d checks %d goal %d active %d deathlink %d in logic %s",
+    cleria.log(string.format("state '%s' seed %s slot %d applied %d/%d checks %d goal %d active %d deathlink %d in logic %s left %s",
         A.session:status_text(cleria.time()), st.seed, st.slot, st.applied, #c.received, ys.count(st.checks),
-        st.goal_sent and 1 or 0, active() and 1 or 0, death_link_on() and 1 or 0, tostring(A.in_logic)))
+        st.goal_sent and 1 or 0, active() and 1 or 0, death_link_on() and 1 or 0, tostring(A.in_logic), tostring(A.logic_left)))
 end)
 
 log("loaded: " .. #tbl.locations .. " locations, " .. #tbl.items .. " items")
