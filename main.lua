@@ -219,6 +219,11 @@ local function on_connected()
     A.logic.st = keep
     log("connected as " .. c:player_name(c.slot) .. " (slot " .. c.slot .. ") seed " .. c:seed_name() .. ", " .. #A.logic.regs .. " locations")
     for _, u in ipairs(A.logic.opt.unsupported) do log("not supported: " .. u) end
+    -- a Toal seed on an install with no clear data: Character Select would not offer him
+    if A.logic.opt.character == 2 and cleria.game.unlock_character then
+        cleria.game.unlock_character(3)
+        log("Toal's seed: Character Select offers him for this session")
+    end
     local f = slot_cache(c:seed_name(), c.slot)
     if f then cleria.data.write(f, J.encode(c.slot_data)) end   -- for offline play of this seed's saves
     local ids = {}
