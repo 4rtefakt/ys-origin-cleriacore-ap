@@ -33,7 +33,8 @@ Client.__index = Client
 function M.client(cfg, store)
     cfg.game = cfg.game or "Ys Origin"
     cfg.tags = cfg.tags or {}
-    cfg.version = cfg.version or {major = 0, minor = 6, build = 4}
+    -- 0.6.7: the Ys Origin apworld's required_client_version from 2.0.2 on (an older client is refused)
+    cfg.version = cfg.version or {major = 0, minor = 6, build = 7}
     cfg.items_handling = cfg.items_handling or 7
     return setmetatable({
         cfg = cfg, store = store, state = "disconnected",

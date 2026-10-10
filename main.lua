@@ -25,10 +25,18 @@ local cfg = {
     uuid = S.get("Uuid", ""), death_link = S.get("DeathLink", false), auto_connect = S.get("AutoConnect", false),
     show_status = S.get("ShowStatus", true), show_feed = S.get("ShowFeed", true), show_tracker = S.get("ShowTracker", false),
     export_state = S.get("ExportState", true),
+    -- quality of life (each off or neutral by default unless it only adds information)
+    show_room = S.get("ShowRoom", false), room_spoil = S.get("RoomSpoilers", false), tracker_mode = S.get("TrackerMode", 1),
+    boss_on_kill = S.get("BossOnKill", false),
+    hint_alerts = S.get("HintAlerts", true), exp_mult = S.get("ExpMultiplier", 0),
+    autosave = S.get("Autosave", true), autosave_slot = S.get("AutosaveSlot", 8),
 }
 local cfg_keys = {server = "Server", slot = "Slot", password = "Password", uuid = "Uuid", death_link = "DeathLink",
                   auto_connect = "AutoConnect", show_status = "ShowStatus", show_feed = "ShowFeed",
-                  show_tracker = "ShowTracker", export_state = "ExportState"}
+                  show_tracker = "ShowTracker", export_state = "ExportState", show_room = "ShowRoom",
+                  room_spoil = "RoomSpoilers", tracker_mode = "TrackerMode", boss_on_kill = "BossOnKill",
+                  hint_alerts = "HintAlerts", exp_mult = "ExpMultiplier",
+                  autosave = "Autosave", autosave_slot = "AutosaveSlot"}
 local function persist(k) S.set(cfg_keys[k], cfg[k]) end
 
 -- ---- the runtime state ---------------------------------------------------------------------------------------
@@ -38,6 +46,7 @@ local A = {
     death_pending = false, death_from = "", death_cause = "", death_at = -100, death_ours = false, death_ours_tick = 0,
     fog_t = 0, butter_t = 0, butter_tier = 0, chaos_pending = 0, leech_pending = 0,
     feed = {}, log = {}, state_dirty = true, state_at = -10, rng = 0xA9,
+    hints = {}, chat_text = "", hint_text = "",
 }
 
 local function log(s)
@@ -88,9 +97,19 @@ local function slot_cache(seed, slot)
     return "slot_" .. seed:gsub("[^%w]", "_") .. "_" .. slot .. ".json"
 end
 
+-- ---- autosave (mod API 4: cleria.game.save) --------------------------------------------------------------
+-- After anything worth keeping (a check, a received item, a key door, a Panacea, a level-up) the game is saved to the
+-- player's autosave slot. A request only marks the tick; the tick handler saves 1.5 s later and keeps
+-- asking until the engine agrees (it refuses in a cutscene, a boss fight, an arena, a room just entered).
+A.can_save = type(G.save) == "function"
+local function autosave_request()
+    if cfg.autosave and A.can_save then A.autosave_at = A.ticks end
+end
+
 -- ---- checks -------------------------------------------------------------------------------------------------
 local function report(ids, how)
     if #ids == 0 then return end
+    autosave_request()
     for _, id in ipairs(ids) do
         local r = A.logic:reg(id)
         log("check " .. id .. " " .. (r and r.name or "?") .. " (" .. how .. ")")
@@ -128,6 +147,7 @@ local function sync_save()
                 c:check_locations(ids)
             end
             if not st.started then log("slot loadout: " .. tostring(A.logic:start_loadout())) end
+            A.logic.boss_on_kill = cfg.boss_on_kill
             report(A.logic:on_scene(ys.scene_number(A.room)), "room")
             local want, playing = A.logic.opt.character, G.character()
             if want >= 0 and playing >= 1 and want + 1 ~= playing then
@@ -199,13 +219,68 @@ local function on_connected()
     A.logic.st = keep
     log("connected as " .. c:player_name(c.slot) .. " (slot " .. c.slot .. ") seed " .. c:seed_name() .. ", " .. #A.logic.regs .. " locations")
     for _, u in ipairs(A.logic.opt.unsupported) do log("not supported: " .. u) end
+    -- a Toal seed on an install with no clear data: Character Select would not offer him
+    if A.logic.opt.character == 2 and cleria.game.unlock_character then
+        cleria.game.unlock_character(3)
+        log("Toal's seed: Character Select offers him for this session")
+    end
+    -- the seed's logic for the "in logic" count: in the slot data from apworld 2.0.2, else a file beside the
+    -- slot cache (logic_<seed>_<slot>.json) when someone exported it for an older seed
+    A.graph, A.logic_key = c.slot_data.logic, nil
+    if type(A.graph) ~= "table" then
+        local t = cleria.data.read("logic_" .. c:seed_name() .. "_" .. c.slot .. ".json")
+        A.graph = t and J.decode(t) or nil
+    end
+    if type(A.graph) ~= "table" or type(A.graph.entrances) ~= "table" or type(A.graph.locations) ~= "table" then
+        A.graph = nil
+    end
+    -- this seed's saves in their own folder, as the retail mod's archipelago_<seed> (the frame handler sets it)
+    A.want_profile = "AP_" .. c:seed_name() .. "_" .. c:player_name(c.slot)
     local f = slot_cache(c:seed_name(), c.slot)
     if f then cleria.data.write(f, J.encode(c.slot_data)) end   -- for offline play of this seed's saves
     local ids = {}
     for _, r in ipairs(A.logic.regs) do ids[#ids + 1] = r.id end
     c:scout_locations(ids)   -- what every location holds, for the treasure box [MOD hook_ap.cpp:1754]
     if death_link_on() and not c:has_tag("DeathLink") then c:set_tags({"DeathLink"}) end
+    -- this slot's hints: the server keeps them under a read-only key and tells us when it changes
+    local key = "_read_hints_" .. c.team .. "_" .. c.slot
+    A.hint_key, A.hints = key, {}
+    c:queue({cmd = "Get", keys = J.array({key})})
+    c:queue({cmd = "SetNotify", keys = J.array({key})})
     sync_save()
+end
+
+-- the server's hint list -> A.hints (unfound first), names resolved
+local function read_hints(v)
+    local c = A.session.client
+    local out = {}
+    for _, h in ipairs(type(v) == "table" and v or {}) do
+        if type(h) == "table" and math.type(h.location) and math.type(h.item) then
+            out[#out + 1] = {location = h.location, item = h.item, finder = h.finding_player or 0, receiver = h.receiving_player or 0,
+                             found = h.found == true, flags = math.type(h.item_flags) and h.item_flags or 0}
+        end
+    end
+    table.sort(out, function(a, b) if a.found ~= b.found then return not a.found end return a.location < b.location end)
+    for _, h in ipairs(out) do
+        h.item_name = c:item_name(h.item, h.receiver)
+        h.location_name = c:location_name(h.location, h.finder)
+        h.finder_name, h.receiver_name = c:player_name(h.finder), c:player_name(h.receiver)
+    end
+    A.hints = out
+    log("hints: " .. #out)
+end
+
+-- entering a room that holds a hinted item of ours to find
+local function hint_alert(sc)
+    if not cfg.hint_alerts or not connected() then return end
+    local c = A.session.client
+    for _, h in ipairs(A.hints) do
+        local l = tbl.loc[h.location]
+        if not h.found and h.finder == c.slot and l and l.scene == sc and not A.logic.st.checks[h.location] then
+            feed_text("Hinted here: " .. h.item_name .. (h.receiver == c.slot and "" or " for " .. h.receiver_name) ..
+                      " (" .. (l.room or h.location_name) .. ")", 0xF2EA8C)
+        end
+    end
 end
 
 local function handle(e)
@@ -236,6 +311,11 @@ local function handle(e)
             A.death_pending, A.death_from, A.death_cause = true, e.source, e.text
             log("deathlink from " .. e.source .. (e.text == "" and "" or ": " .. e.text))
         end
+    elseif k == "Retrieved" then
+        local keys = type(e.data.keys) == "table" and e.data.keys or {}
+        if A.hint_key and keys[A.hint_key] ~= nil then read_hints(keys[A.hint_key]) end
+    elseif k == "SetReply" then
+        if A.hint_key and e.data.key == A.hint_key then read_hints(e.data.value) end
     elseif k == "InvalidPacket" then log("server: invalid packet: " .. e.text)
     elseif k == "ProtocolError" then log("protocol error: " .. e.text)
     end
@@ -286,11 +366,28 @@ cleria.content.add_filter(function(q)
     local chest = A.chests[q.script] ~= nil
     local ap_chest = chest and tbl.chest_loc[key] ~= nil and A.logic:reg(tbl.chest_loc[key]) ~= nil
     if q.kind == "store" then
+        -- An elemental altar zeroes its level cell (S_1004 182, S_2009 183, S_3007 184): "the skill starts at
+        -- level 1". With the skill already received and levelled, visiting the altar threw the level back to 1
+        -- (reported on the retail mod, 2.0.1). Keep the level.
+        if q.index >= 0xB6 and q.index <= 0xB8 and q.value == 0 and q.old > 0 then
+            log(string.format("kept skill level g_flags[0x%X] = %d (the altar's reset dropped, %s)", q.index, q.old, key))
+            return "suppress"
+        end
         if (not chest or ap_chest) and A.logic:suppress_store(q.index, q.old, q.value) then
             log(string.format("suppressed g_flags[0x%X] %d -> %d (%s)", q.index, q.old, q.value, key))
+            -- an inventory item (not the skill powers or the drained ring that ride along) swallowed outside
+            -- a chest: if no check comes with it, the scene's "you got it" is a lie (withheld_notice)
+            if not chest and q.index >= 0x48 and q.index <= 0x73 and q.index ~= 0x5E then
+                A.withheld = {index = q.index, tick = A.ticks}
+            end
             return "suppress"
         end
         local f = A.logic:on_store(q.index, q.old, q.value)
+        if #f > 0 and ys.sp_chest[q.index] then   -- an SP chest that is a location: its vanilla SP goes back
+            local back = math.floor(math.min(ys.sp_chest[q.index], cleria.player.sp()))
+            cleria.player.add_sp(-back)
+            log("SP chest: took back the vanilla " .. back .. " SP (" .. key .. ")")
+        end
         if #f > 0 then
             A.fired_script, A.fired_loc, A.fired_tick = q.script, f[#f], A.ticks
             report(f, "store")
@@ -321,6 +418,39 @@ cleria.content.add_filter(function(q)
     if q.kind == "window" then log("box " .. key .. ": " .. (d.text:gsub("<color:[^>]*>", ""))) end
     return d
 end)
+
+-- ---- the statue shop: the seed's prices and what each row holds (mod API 5) ----------------------------------
+if cleria.shop and cleria.shop.add_filter then
+    cleria.shop.add_filter(function(q)
+        if not active() or (q.kind ~= "price" and q.kind ~= "row") then return nil end
+        local r = A.logic:bless_reg(q.index)
+        if not r then return nil end
+        local c = A.session.client
+        local s = c.scouted[r.id]
+        local gear = q.index == 7 or q.index == 8          -- the armor / leggings ladder keeps its own prices
+        local price = not gear and A.logic.opt.blessing_costs[r.id] or nil
+        if price and price < 0 then price = nil end
+        -- one_per_floor: a slot not yet on sale costs more than the wallet can hold
+        local locked = price and A.logic:shop_locked(r, s and s.flags & 1 == 1)
+        if q.kind == "price" then
+            if locked then return {action = "replace", value = 1000000} end
+            return price and {action = "replace", value = price} or nil
+        end
+        if q.value < 0 then return nil end                      -- a "[Done]" row
+        if locked then return {action = "replace", text = "Locked: visit another floor"} end
+        if not price and not gear then return nil end
+        local what
+        if A.logic.opt.shop_hints and s and not A.logic.st.checks[r.id] then
+            what = c:item_name(s.item, s.player)
+            if s.player ~= c.slot then what = what .. " (" .. c:player_name(s.player) .. ")" end
+        end
+        if not what then
+            if not price then return nil end
+            return {action = "replace", text = (q.text:gsub("%d+%s*$", tostring(price)))}
+        end
+        return {action = "replace", text = what .. " - [SP:]" .. (price or q.value)}
+    end)
+end
 
 -- ---- receiving, per tick -------------------------------------------------------------------------------------
 local function run_trap(t)
@@ -358,14 +488,41 @@ local function grant_pending()
         end
     end
     if any then store_state() end
+    if any and st.applied > A.live_from then autosave_request() end   -- not for the login list of a loaded save
+end
+
+-- A story beat that hands over a pool item (the Zelkarons "charging" the Evil Ring) still plays its dialogue
+-- while the store is swallowed. A chest is fine: its check fires in the same script and the box says what was
+-- there. When a swallowed store has no check around it and the player still lacks the item, say so
+-- [MOD report_withheld]. [H] 4 s either side.
+local kWithheldTicks = 4 * 60
+local function withheld_notice()
+    local w = A.withheld
+    if not w or A.ticks - w.tick < kWithheldTicks then return end
+    A.withheld = nil
+    if A.fired_tick > 0 and math.abs(A.fired_tick - w.tick) <= kWithheldTicks then return end   -- a check: the box told
+    if G.flag(w.index) >= 1 then return end                                                    -- already owned
+    local name = G.item_name(w.index) or string.format("item 0x%X", w.index)
+    log("withheld: the game's own " .. name .. " (the seed's comes from the multiworld)")
 end
 
 cleria.events.on("room_enter", function(e)
     A.room = e.room
     A.chests = G.chests()
     if not active() then return end
+    A.logic.boss_on_kill = cfg.boss_on_kill
     report(A.logic:on_scene(ys.scene_number(e.room)), "room")
+    hint_alert(ys.scene_number(e.room))
 end)
+
+if (cleria.api_version or 3) >= 4 then
+    cleria.events.on("boss_defeated", function(e)
+        if not active() or not cfg.boss_on_kill then return end
+        report(A.logic:boss_defeated(ys.scene_number(e.room)), "boss defeated")
+    end)
+    cleria.events.on("item_used", function() if active() then autosave_request() end end)     -- a Panacea
+    cleria.events.on("door_opened", function() if active() then autosave_request() end end)   -- a key / medallion door
+end
 
 cleria.events.on("death", function()
     local ours = A.death_ours and A.ticks - A.death_ours_tick < 120
@@ -380,7 +537,20 @@ cleria.events.on("death", function()
     log("deathlink sent")
 end)
 
-cleria.game.exp_factor(function(level) return active() and A.logic:exp_factor(level) or 1 end)
+-- the EXP of a kill: the player's own multiplier when set (the page), else the seed's
+local function exp_mult(level)
+    if not active() then return 1 end
+    if cfg.exp_mult > 0 then return cfg.exp_mult end
+    return A.logic:exp_factor(level)
+end
+cleria.game.exp_factor(exp_mult)
+-- a kill gives at least half the multiplier (mod API 6): the game's cut for a monster far below the player's
+-- level would otherwise leave 1 EXP whatever the multiplier
+if cleria.combat then
+    cleria.combat.add_filter("exp", function(q)
+        if q.source == "kill" then return math.max(q.value, exp_mult(q.level) // 2) end
+    end)
+end
 cleria.speedrun.modification(function()
     if A.session.status ~= "idle" or A.logic.st.seed ~= "" then return "Archipelago session" end
 end)
@@ -411,22 +581,82 @@ end
 cleria.events.on("frame", function()
     A.session:update(cleria.time())
     for _, e in ipairs(A.session:take_events()) do handle(e) end
+    -- the save profile changes on the launcher and the title only: refused in a game, tried again each second
+    local now = cleria.time()
+    if A.want_profile and cleria.save.set_profile and now - (A.profile_at or -10) >= 1 then
+        A.profile_at = now
+        if cleria.save.set_profile(A.want_profile) then
+            log("saves: profile " .. cleria.save.profile())
+            A.want_profile = nil
+        end
+    end
 end)
+
+-- for the status line: how many locations the received items reach, and how many of those are still unchecked
+local function count_logic()
+    local c, st = A.session.client, A.logic.st
+    if not A.graph or not A.logic.configured then A.in_logic = nil return end
+    local key = #c.received .. ":" .. ys.count(st.checks)
+    if key == A.logic_key then return end
+    A.logic_key = key
+    local have = {}
+    for _, it in ipairs(c.received) do
+        local n = c:item_name(it.item, c.slot)
+        have[n] = (have[n] or 0) + 1
+    end
+    local set = ys.in_logic(A.graph, have)
+    local n, left = 0, 0
+    for _, r in ipairs(A.logic.regs) do
+        if set[r.id] then
+            n = n + 1
+            if not st.checks[r.id] then left = left + 1 end
+        end
+    end
+    A.in_logic, A.logic_left = n, left
+end
 
 cleria.events.on("tick", function()
     A.ticks = A.ticks + 1
+    if A.ticks % 30 == 0 then count_logic() end
     if A.fog_t > 0 then A.fog_t = A.fog_t - 1 end
-    if not A.in_game or not cleria.save.ready() then write_state() return end
+    if not A.in_game or not cleria.save.ready() then A.last_level = nil write_state() return end
     local frozen = G.frozen()
+    local lv = cleria.player.level()
+    if A.last_level and lv > A.last_level then autosave_request() end   -- a level-up
+    A.last_level = lv
     if A.butter_t > 0 then
         A.butter_t = A.butter_t - 1
         if A.butter_t == 0 then cleria.player.set_weapon_tier(A.butter_tier) end
     end
     if active() then
+        A.logic.boss_on_kill = cfg.boss_on_kill
         report(A.logic:sweep(), "sweep")                    -- flags set behind the VM (a safety net)
         if connected() and not frozen then grant_pending() end   -- never into a cutscene
         if A.butter_t <= 0 then A.logic:enforce() end
+        if A.autosave_at and A.ticks - A.autosave_at >= 90 and A.ticks % 15 == 0 then
+            local slot = math.max(1, math.min(64, math.floor(cfg.autosave_slot)))
+            store_state()
+            if G.save(slot - 1) then   -- the file number is the book's "No.NN" minus one
+                A.autosave_at = nil
+                A.saved_at = cleria.time()   -- the "Saving..." mark (ap/ui.lua)
+                log(string.format("autosave: wrote No.%02d", slot))
+            end
+        end
+        local fixed = A.logic:repair(A.logic.scene, A.ticks)
+        if fixed then log("repair: " .. fixed) end
+        withheld_notice()
         if not frozen then
+            -- random start: the first time a new game stands in a real room, go to the seed's start statue
+            if A.logic.st.started and A.logic.scene >= 1000 and A.logic.scene <= 6999 then
+                local w, sc = A.logic:spawn_warp()
+                if w then
+                    G.set_warp_unlocked(w, true)
+                    A.logic:spawn_done(sc)
+                    log("random start: warp to S_" .. sc .. " (warp " .. w .. ")")
+                    G.warp_to(w)
+                    store_state()
+                end
+            end
             local lv = A.logic:level_floor(cleria.player.level())
             if lv > 0 then
                 cleria.player.set_level(lv)
@@ -488,14 +718,16 @@ end)
 cleria.command("apopt", function(args)
     local k, v = args:match("^(%w+)=(.*)$")
     local on = v ~= nil and v ~= "0"
-    local map = {ShowFeed = "show_feed", ShowTracker = "show_tracker", ShowStatus = "show_status", DeathLink = "death_link"}
+    local map = {ShowFeed = "show_feed", ShowTracker = "show_tracker", ShowStatus = "show_status", DeathLink = "death_link",
+                 BossOnKill = "boss_on_kill", ShowRoom = "show_room"}
     if k and map[k] then cfg[map[k]] = on end
 end)
+cleria.command("apsp", function() cleria.log(string.format("sp = %d", math.floor(cleria.player.sp() or 0))) end)
 cleria.command("apstate", function()
     local c, st = A.session.client, A.logic.st
-    cleria.log(string.format("state '%s' seed %s slot %d applied %d/%d checks %d goal %d active %d deathlink %d",
+    cleria.log(string.format("state '%s' seed %s slot %d applied %d/%d checks %d goal %d active %d deathlink %d in logic %s left %s",
         A.session:status_text(cleria.time()), st.seed, st.slot, st.applied, #c.received, ys.count(st.checks),
-        st.goal_sent and 1 or 0, active() and 1 or 0, death_link_on() and 1 or 0))
+        st.goal_sent and 1 or 0, active() and 1 or 0, death_link_on() and 1 or 0, tostring(A.in_logic), tostring(A.logic_left)))
 end)
 
 log("loaded: " .. #tbl.locations .. " locations, " .. #tbl.items .. " items")
