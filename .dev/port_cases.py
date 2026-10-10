@@ -91,6 +91,11 @@ ShowTracker=1
         drive=aplua_regress.CHEST + ";740:ok;1000:lua=apstate;1020:quit",
         expect=[P + "check 5857605 Wailing Blue: 2F Path 1 (store)", "sidecar yso_07.cleria written",
                 P + "autosave: wrote No.08"])),
+    # Mod API 4. A level-up alone asks for the autosave.
+    "port_autosave_level": (dict(), dict(
+        room="S_10/S_1001/S_1001", aplua={},
+        drive="300:level=5;700:lua=apstate;720:quit",
+        expect=[P + "autosave: wrote No.08"])),
     # Mod API 4. The boss_defeated event sends the boss check when "Boss checks on defeat" is on.
     "port_boss_event": (dict(), dict(
         room="S_10/S_1099/S_1099", aplua={}, ini_extra="""BossOnKill=1
@@ -152,7 +157,7 @@ def start(case, env, settings_dir):          # extra lines for the mod's setting
 aplua_regress.start = start
 API4 = b"boss_defeated" in open(exe, "rb").read()      # an engine with mod API 4 (game.save, boss_defeated)
 if not API4:
-    for n in ("port_autosave", "port_boss_event"):
+    for n in ("port_autosave", "port_autosave_level", "port_boss_event"):
         CASES.pop(n)
     print("mod API 3 engine: the API 4 cases are skipped")
 names = sys.argv[1:] or list(CASES)

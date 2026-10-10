@@ -98,7 +98,7 @@ local function slot_cache(seed, slot)
 end
 
 -- ---- autosave (mod API 4: cleria.game.save) --------------------------------------------------------------
--- After anything worth keeping (a check, a received item, a key door, a Panacea) the game is saved to the
+-- After anything worth keeping (a check, a received item, a key door, a Panacea, a level-up) the game is saved to the
 -- player's autosave slot. A request only marks the tick; the tick handler saves 1.5 s later and keeps
 -- asking until the engine agrees (it refuses in a cutscene, a boss fight, an arena, a room just entered).
 A.can_save = type(G.save) == "function"
@@ -611,8 +611,11 @@ cleria.events.on("tick", function()
     A.ticks = A.ticks + 1
     if A.ticks % 30 == 0 then count_logic() end
     if A.fog_t > 0 then A.fog_t = A.fog_t - 1 end
-    if not A.in_game or not cleria.save.ready() then write_state() return end
+    if not A.in_game or not cleria.save.ready() then A.last_level = nil write_state() return end
     local frozen = G.frozen()
+    local lv = cleria.player.level()
+    if A.last_level and lv > A.last_level then autosave_request() end   -- a level-up
+    A.last_level = lv
     if A.butter_t > 0 then
         A.butter_t = A.butter_t - 1
         if A.butter_t == 0 then cleria.player.set_weapon_tier(A.butter_tier) end
