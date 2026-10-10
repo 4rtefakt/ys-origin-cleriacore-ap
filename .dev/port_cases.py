@@ -96,6 +96,14 @@ ShowTracker=1
         room="S_10/S_1001/S_1001", aplua={},
         drive="300:level=5;700:lua=apstate;720:quit",
         expect=[P + "autosave: wrote No.08"])),
+    # Mod API 6. A kill gives at least half the EXP multiplier: Hard, level 13 against a level-3 monster at x100
+    # is 14 by the game's own rule (CleriaCore's lua_exp_floor), 50 here.
+    "port_exp_floor": (dict(), dict(
+        room="S_10/S_1002/S_1002", aplua={}, ini_extra="""ExpMultiplier=100
+""",
+        drive="5:diff=3;6:level=13;8:opt=DamageDealt=10;10:opt=DamageTaken=0;14:stats;" +
+              ";".join("%d:near=17;%d:atk" % (t, t + 1) for t in range(40, 140, 25)) + ";150:stats;160:quit",
+        expect=["stats exp 21936 lv 13", "stats exp 21986 lv 13"])),
     # Mod API 4. The boss_defeated event sends the boss check when "Boss checks on defeat" is on.
     "port_boss_event": (dict(), dict(
         room="S_10/S_1099/S_1099", aplua={}, ini_extra="""BossOnKill=1
@@ -160,6 +168,9 @@ if not API4:
     for n in ("port_autosave", "port_autosave_level", "port_boss_event"):
         CASES.pop(n)
     print("mod API 3 engine: the API 4 cases are skipped")
+if b"pickup_collected" not in open(exe, "rb").read():      # an engine with mod API 6 (cleria.combat)
+    CASES.pop("port_exp_floor")
+    print("no mod API 6: port_exp_floor is skipped")
 names = sys.argv[1:] or list(CASES)
 fails = 0
 for n in names:

@@ -538,11 +538,19 @@ cleria.events.on("death", function()
 end)
 
 -- the EXP of a kill: the player's own multiplier when set (the page), else the seed's
-cleria.game.exp_factor(function(level)
+local function exp_mult(level)
     if not active() then return 1 end
     if cfg.exp_mult > 0 then return cfg.exp_mult end
     return A.logic:exp_factor(level)
-end)
+end
+cleria.game.exp_factor(exp_mult)
+-- a kill gives at least half the multiplier (mod API 6): the game's cut for a monster far below the player's
+-- level would otherwise leave 1 EXP whatever the multiplier
+if cleria.combat then
+    cleria.combat.add_filter("exp", function(q)
+        if q.source == "kill" then return math.max(q.value, exp_mult(q.level) // 2) end
+    end)
+end
 cleria.speedrun.modification(function()
     if A.session.status ~= "idle" or A.logic.st.seed ~= "" then return "Archipelago session" end
 end)
