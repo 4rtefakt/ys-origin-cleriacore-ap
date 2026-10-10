@@ -627,6 +627,7 @@ cleria.events.on("tick", function()
             store_state()
             if G.save(slot - 1) then   -- the file number is the book's "No.NN" minus one
                 A.autosave_at = nil
+                A.saved_at = cleria.time()   -- the "Saving..." mark (ap/ui.lua)
                 log(string.format("autosave: wrote No.%02d", slot))
             end
         end

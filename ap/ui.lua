@@ -68,6 +68,19 @@ function M.install(A, persist)
         end
     end)
 
+    -- an autosave was just written: the logo and "Saving..." for 2 s, bottom right
+    cleria.hud.layer("saving", function(d)
+        local age = A.saved_at and cleria.time() - A.saved_at
+        if not age or age > 2 then return end
+        local S = d.scale
+        local px, a = 15 * S, math.min(1, age * 6, (2 - age) * 2)
+        local tw = d:text_size("Saving...", {size = px})
+        local x0, y0, h = d.w - tw - 58 * S, d.h - 44 * S, 28 * S
+        d:rect(x0, y0, tw + 40 * S, h, {color = 0x100F0B, alpha = a * 170 / 255, rounding = 4 * S})
+        logo(d, x0 + 15 * S, y0 + h / 2, 18 * S, a)
+        d:text(x0 + 30 * S, y0 + h / 2 - px * 0.58, "Saving...", {size = px, color = 0xEAE6DA, alpha = a * 230 / 255})
+    end)
+
     -- the connection line, top left
     cleria.hud.layer("status", function(d)
         local s = A.session.status
