@@ -85,6 +85,30 @@ ShowTracker=1
         expect=[P + "sp = ", P + "SP chest: took back the vanilla 5000 SP (S_4015/S_BOX01)",
                 "Silent Sands: 15F Room (store)", P + "sp = "],
         absent=["sp = 5", "sp = 6"])),          # the wallet never shows the chest's 5000
+    # Toal and Rado's Annex: his story flags 269 / 289 start the stoppers of S_4014 and S_4104 (and keep the Shion
+    # chain from ending). They are held at 0 in those rooms, so S_4104 never starts Kadena_Stopper...
+    "port_toal_annex": (dict(), dict(
+        room="S_40/S_4014/S_4014", char="3", aplua={},
+        drive="60:flag=289,1;61:flag=269,1;120:lua=apflag 289;150:exit=2;400:scripts;420:lua=apflag 269;440:quit",
+        expect=[P + "repair: Rado's Annex: Toal's story flag 289 held at 0", P + "flag 0x121 = 0", ">> entering S_4104",
+                P + "flag 0x10D = 0"],
+        absent=["script Kadena_Stopper"])),
+    # ...and put back on the way out (S_4019).
+    "port_toal_annex_out": (dict(), dict(
+        room="S_40/S_4014/S_4014", char="3", aplua={},
+        drive="60:flag=289,1;120:lua=apflag 289;150:exit=0;400:lua=apflag 289;420:quit",
+        expect=[P + "flag 0x121 = 0", ">> entering S_4019", P + "repair: Rado's Annex: Toal's story flag 289 put back",
+                P + "flag 0x121 = 1"])),
+    # ...and the Shion fight's chain ends with 289 set: S_4104 runs EV_4104_Thor (not the stopper branch), on to
+    # S_4017 and S_4021, where 232 = 1 stops S_3080 from starting the fight again; back in S_3006, 289 is back.
+    "port_toal_shion_chain": (dict(), dict(
+        room="S_30/S_3080/S_3080", char="3", aplua={}, env=dict(drive_regress._LOCK, CLERIA_LEVEL="32"),
+        drive="5:flag=289,1;" + drive_regress._S3080.format(end=30000, cast=170) +
+              "29990:lua=apflag 232;29995:lua=apflag 289;30001:quit",
+        expect=[P + "repair: Rado's Annex: Toal's story flag 289 held at 0", ">> entering S_4104", ">> entering S_4017",
+                ">> entering S_4021", ">> entering S_3006", P + "repair: Rado's Annex: Toal's story flag 289 put back",
+                P + "flag 0xE8 = 1", P + "flag 0x121 = 1"],
+        absent=["script Kadena_Stopper"])),
     # Mod API 4. Autosave: a chest check, then the save to the book's No.08 (file 7) at the next safe tick.
     "port_autosave": (dict(), dict(
         room="S_10/S_1001/S_1001", aplua={},
@@ -176,6 +200,11 @@ fails = 0
 for n in names:
     patch, case = CASES[n]
     fixture(patch)
-    fails += not drive_regress.run(n, case, exe, assets)
+    r = drive_regress.run(n, case, exe, assets)
+    if isinstance(r, tuple):                 # (passed, its report lines, seconds) since CleriaCore's --jobs
+        for line in r[1]:
+            print(line)
+        r = r[0]
+    fails += not r
 print(f"{len(names) - fails}/{len(names)} passed")
 sys.exit(1 if fails else 0)

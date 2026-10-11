@@ -186,7 +186,7 @@ end
 -- roda: Roda Fruits received so far (-1 = a save from before 0.2, whose fruits were counted into the cell);
 -- spawned: the random-start warp was done (or is not owed: a save that had already started)
 function M.new_state() return {seed = "", slot_name = "", slot = 0, applied = 0, checks = {}, claimed = {}, goal_sent = false,
-                               started = false, saw_gameplay = false, ore = 0, prog = {}, statues = {}, roda = 0,
+                               started = false, saw_gameplay = false, ore = 0, prog = {}, statues = {}, roda = 0, held = {},
                                spawned = false, floors = {}} end
 
 local function set_list(s)
@@ -205,7 +205,7 @@ function M.state_to_table(st)
     return {seed = st.seed, slot = st.slot, slot_name = st.slot_name, applied = st.applied, checks = set_list(st.checks),
             claimed = set_list(st.claimed), goal = st.goal_sent, started = st.started, gameplay = st.saw_gameplay, ore = st.ore,
             prog = st.prog, statues = set_list(st.statues), roda = st.roda, spawned = st.spawned,
-            floors = set_list(st.floors)}
+            floors = set_list(st.floors), held = set_list(st.held)}
 end
 function M.state_from_table(t)
     local st = M.new_state()
@@ -213,7 +213,7 @@ function M.state_from_table(t)
     st.seed, st.slot, st.slot_name = t.seed, to_int(t.slot, 0), type(t.slot_name) == "string" and t.slot_name or ""
     st.applied = math.max(0, to_int(t.applied, 0))
     st.checks, st.claimed, st.statues = list_set(t.checks), list_set(t.claimed), list_set(t.statues)
-    st.floors = list_set(t.floors)
+    st.floors, st.held = list_set(t.floors), list_set(t.held)
     st.goal_sent, st.started, st.saw_gameplay = t.goal == true, t.started == true, t.gameplay == true
     st.ore = math.max(0, to_int(t.ore, 0))
     st.roda = t.roda == nil and -1 or math.max(-1, to_int(t.roda, -1))
@@ -586,9 +586,32 @@ end
 -- always finds its fruit [MOD reconcile_roda_fruit].
 function Logic:roda_derived() return #self.opt.roo_flags > 0 and self.st.roda >= 0 end
 
+-- Toal and Rado's Annex. Two of his story flags, 269 (set on 20F, EV_5102_Thor_1) and 289 (set above the 21F
+-- boss, EV5097_Thor), close the annex to him: its bridge (S_4104 Kadena_Stopper -> Thor_Stopper00 / 01) and
+-- the room before it (S_4014 s_Stop4014_Thor) walk him back, and S_4104's room script takes that branch
+-- before the one that carries on from the Shion fight (206 == 1 -> EV_4104_Thor), so the fight's chain
+-- (S_4104 -> S_4017 -> S_4021, which sets 232) never ends and S_3080 starts the fight again on every entry.
+-- A seed reaches those floors in any order, so both flags are held at 0 while he is in these rooms (the
+-- stoppers test them when he steps on the trigger) and put back when he leaves.
+local kToalAnnex = {[3080] = true, [4013] = true, [4014] = true, [4016] = true, [4017] = true, [4021] = true, [4104] = true}
+function Logic:toal_annex(scene)
+    local here, out = kToalAnnex[scene] == true, nil
+    for _, f in ipairs({269, 289}) do
+        if here and G.flag(f) == 1 then
+            G.set_flag(f, 0) self.st.held[f] = true
+            out = "Rado's Annex: Toal's story flag " .. f .. " held at 0 in here (the annex stays open to him)"
+        elseif not here and self.st.held[f] then
+            G.set_flag(f, 1) self.st.held[f] = nil
+            out = "Rado's Annex: Toal's story flag " .. f .. " put back"
+        end
+    end
+    return out
+end
+
 -- per tick: repairs of story states a randomized seed can strand [MOD repair_1f_burden_softlock,
--- repair_dreaming_idol_chain]. Both are Yunica's and both follow from the shipped scripts.
+-- repair_dreaming_idol_chain]. Those two are Yunica's and both follow from the shipped scripts.
 function Logic:repair(scene, ticks)
+    if G.flag(150) == 3 then return self:toal_annex(scene) end
     if G.flag(150) ~= 1 then return nil end
     -- After the Kishgal duel she is sent to 1F ("I'm just a burden", 242 == 1 and 243 == 0): the stairs and
     -- the Crystal refuse until the Roy scene, which needs the four 1F talks (278 == 4). Each talk sits under
