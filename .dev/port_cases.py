@@ -32,7 +32,20 @@ def fixture(patch):
     aplua_regress.ROOT = SCR          # only the server path uses it once APLUA_MOD_ZIP is set
 
 
+def boss_on_flag():      # apworld 2.2: a boss check arrives as its fight's win flag (Velagunder: 220)
+    sd = json.load(open(os.path.join(CC, "tests", "ap", "test_slot_data.json"), encoding="utf-8"))
+    det = dict(sd["location_detect"])
+    det["Boss: 5F Velagunder (S_1099)"] = {"method": "flag", "offset": "0x%X" % (0x36B91C + 4 * 220)}
+    return dict(location_detect=det)
+
+
 CASES = {
+    # A 2.2 seed, "Boss checks on defeat" off: nothing at the door all the same, the check when 220 is set.
+    "port_boss_flag_seed": (boss_on_flag(), dict(
+        room="S_10/S_1099/S_1099", aplua={},
+        drive="120:lua=apstate;130:flag=220,1;200:lua=apstate;220:quit",
+        expect=["goal 0 active 1", "Boss: 5F Velagunder (S_1099) (", "goal 0 active 1"],
+        absent=["Boss: 5F Velagunder (S_1099) (room)"])),
     # Roda Fruit derived from roo_flags: 2 received -> 2; the first Roo fed -> 1; a Roo beyond the count
     # fed (flag 414, the 5th) costs nothing: the script's -1 is refunded.
     "port_roda": (dict(roo_flags=[312, 339, 362, 388, 414, 458]), dict(

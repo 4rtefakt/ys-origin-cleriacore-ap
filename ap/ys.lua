@@ -301,10 +301,12 @@ end
 function Logic:reg(id) return self.by_id[id] end
 
 -- "Boss checks on defeat" (the mod's option): a boss room's check waits for the fight's flag instead of
--- firing at the door. Boss locations are excluded from progression in the apworld, so this is never out
--- of logic.
+-- firing at the door. Since apworld 2.2 the seed says so itself (a boss check arrives as a flag detect and
+-- can hold any item), so this only acts on older seeds and on the checks the apworld left on entry. Toal's
+-- S_3080 is one of those: his 232 is set in S_4021, behind Rado's Annex, which would be out of logic.
 function Logic:boss_flag(r)
     if not self.boss_on_kill or r.detect ~= "scene" then return nil end
+    if r.scene == 3080 and G.flag(150) == 3 then return nil end
     local l = self.tbl and self.tbl.loc[r.id]
     return (l and l.type == "boss") and kBossFlag[r.scene] or nil
 end
