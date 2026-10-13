@@ -685,6 +685,14 @@ cleria.events.on("frame", function()
         local s = A.session.status
         if s == "connected" and A.logic.configured and not A.want_profile then
             go.on = false
+            if go.mode == "continue" then   -- the seed's most recent save, at once
+                cleria.mods.command("ore.menu", "")
+                if not cleria.mods.command("ore.continue") then
+                    go.note = "No save of this seed yet"
+                    go.reopen(7)
+                end
+                return
+            end
             local ch = A.logic.opt.character >= 0 and math.min(A.logic.opt.character, 2) + 1 or cfg.new_character
             local flags = ch == 3 and "246:1,300:1,229:1,86:1" or "246:1,300:1,187:1,229:1,84:1,85:1"
             local args = string.format("character=%d difficulty=%d extra=%d room=S_1000 flags=%s", ch, cfg.new_difficulty - 1,

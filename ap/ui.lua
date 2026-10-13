@@ -459,7 +459,7 @@ function M.install(A, persist)
         local function seed_character()   -- 0..2 when the room has told it, else -1
             return (A.session.status == "connected" and A.logic.configured and not go.dirty) and A.logic.opt.character or -1
         end
-        local function open_choice() menu("ap_new", "New Game", {"Archipelago", "Classic", "Back"}) end
+        local function open_choice() menu("ap_new", "Archipelago", {"Continue the seed", "New game of a seed", "Classic game", "Back"}) end
         local function open_setup(cursor)
             local sc = seed_character()
             menu("ap_setup", go.note ~= "" and go.note or "Archipelago", {
@@ -472,14 +472,27 @@ function M.install(A, persist)
                 "Start", "Back"}, cursor)
         end
         go.reopen = open_setup   -- main.lua: after a start that failed
+        function go.start(mode)   -- "new" or "continue": connect (the room as the rows now say), wait
+            go.on, go.at, go.mode = true, cleria.time(), mode
+            local s = A.session.status
+            if s ~= "connected" or go.dirty then
+                if s ~= "idle" then A.disconnect() end
+                A.connect()
+            end
+            go.dirty = false
+            menu("ap_wait", "Connecting to " .. cfg.server .. "...", {"Cancel"})
+        end
         local editing = 1
         cleria.command("title_new_game", function()
             go.on, go.note = false, ""
             open_choice()
         end)
         cleria.command("menu_ap_new", function(a)
-            if a == "1" then open_setup(1)
-            elseif a == "2" then cleria.mods.command("ore.title", "new_game") end   -- (3, Back: the title's own list returns)
+            if a == "1" then   -- the room as it is set, then the seed's most recent save (main.lua)
+                if cfg.slot == "" or cfg.server == "" then go.note = "The server and the slot name first" open_setup(1) return end
+                go.start("continue")
+            elseif a == "2" then open_setup(1)
+            elseif a == "3" then cleria.mods.command("ore.title", "new_game") end   -- (4, Back: the title's own list returns)
         end)
         cleria.command("menu_ap_setup", function(a)
             local r = tonumber(a) or 8
@@ -504,14 +517,7 @@ function M.install(A, persist)
                     open_setup(cfg.server == "" and 1 or 2)
                     return
                 end
-                go.on, go.at = true, cleria.time()
-                local s = A.session.status
-                if s ~= "connected" or go.dirty then   -- the room as the rows now say
-                    if s ~= "idle" then A.disconnect() end
-                    A.connect()
-                end
-                go.dirty = false
-                menu("ap_wait", "Connecting to " .. cfg.server .. "...", {"Cancel"})
+                go.start("new")
             else
                 open_choice()
             end
