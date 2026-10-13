@@ -440,6 +440,72 @@ function M.install(A, persist)
             for i = #A.log, math.max(1, #A.log - 5), -1 do p:info("", A.log[i], {color = "muted", desc = A.log[i]}) end
         end
     end)
+
+    -- ---- the title's New Game (the retail loader, CleriaOre: a mod's "title_new_game" command takes the row) ----
+    -- It asks first: an Archipelago seed, or the game as it is. For a seed: the room, the difficulty and the
+    -- version, then the connection; main.lua starts the game once the room has answered (A.new_game).
+    if cleria.ui.window and cleria.mods and cleria.mods.command then
+        local diffs = {"Very Easy", "Easy", "Normal", "Hard", "Nightmare"}
+        local chars = {"Yunica", "Hugo", "Toal"}
+        local go = {on = false, at = 0, note = "", dirty = false}
+        A.new_game = go
+        cleria.ui.window("ap_newgame", {title = "New Game", width = 0.36, pause = false}, function(p)
+            p:text("Play an Archipelago seed, or the game as it is?")
+            if p:button("Archipelago", "A new game of a multiworld seed: you give the room, the game starts at the seed's first statue.") then
+                go.on, go.note = false, ""
+                cleria.ui.open("ap_setup")
+            end
+            if p:button("Classic", "The game's own New Game, without Archipelago.") then
+                p:close()
+                cleria.mods.command("ore.title", "new_game")
+            end
+            if p:button("Back", "Back to the title.") then p:close() end
+        end)
+        cleria.ui.window("ap_setup", {title = "Archipelago", width = 0.5, pause = false}, function(p)
+            local s, changed = A.session.status, false
+            p:section("The room")
+            cfg.server, changed = p:text_field("Server", cfg.server, "The room's address and port, e.g. archipelago.gg:38281.")
+            if changed then persist("server") go.dirty = true end
+            cfg.slot, changed = p:text_field("Slot name", cfg.slot, "Your player (slot) name in the multiworld, as in your YAML.")
+            if changed then persist("slot") go.dirty = true end
+            cfg.password, changed = p:text_field("Password", cfg.password, {desc = "The room password, if it has one.", secret = true, empty = "(none)"})
+            if changed then persist("password") go.dirty = true end
+            p:section("The game")
+            local seed_char = (s == "connected" and A.logic.configured and not go.dirty) and A.logic.opt.character or -1
+            if seed_char >= 0 then
+                p:info("Character", chars[math.min(seed_char, 2) + 1], {desc = "The seed was made for this character."})
+            else
+                cfg.new_character, changed = p:choice("Character", cfg.new_character, chars,
+                                                      "The seed's own character is used when the seed names one; this one otherwise.")
+                if changed then persist("new_character") end
+            end
+            cfg.new_difficulty, changed = p:choice("Difficulty", cfg.new_difficulty, diffs, "The game's difficulty for this new game.")
+            if changed then persist("new_difficulty") end
+            cfg.new_extra, changed = p:toggle("Extra version", cfg.new_extra,
+                                              "The character's Extra version. Only if you bought it in the Bonus Shop: the Normal one otherwise.")
+            if changed then persist("new_extra") end
+            p:info("Status", go.note ~= "" and go.note or A.session:status_text(cleria.time()),
+                   {color = go.note ~= "" and "warn" or (s == "connected" and "good" or "muted")})
+            if go.on then
+                if p:button("Cancel", "Stop waiting for the room.") then go.on = false end
+            else
+                if p:button("Start", {desc = "Connect to the room, then start the new game at the seed's first statue, " ..
+                                             "past the game's opening.", enabled = cfg.slot ~= "" and cfg.server ~= ""}) then
+                    go.on, go.at, go.note = true, cleria.time(), ""
+                    if s ~= "connected" or go.dirty then   -- the room as the fields now say
+                        if s ~= "idle" then A.disconnect() end
+                        A.connect()
+                    end
+                    go.dirty = false
+                end
+                if p:button("Back", "Back to the choice.") then cleria.ui.open("ap_newgame") end
+            end
+        end)
+        cleria.command("title_new_game", function()
+            go.on = false
+            cleria.ui.open("ap_newgame")
+        end)
+    end
 end
 
 return M
