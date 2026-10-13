@@ -690,16 +690,17 @@ cleria.events.on("frame", function()
             local args = string.format("character=%d difficulty=%d extra=%d room=S_1000 flags=%s", ch, cfg.new_difficulty - 1,
                                        cfg.new_extra and 1 or 0, flags)
             log("new game: " .. args)
-            cleria.ui.close()   -- (the loader starts a game from the title only, not under a window)
+            cleria.mods.command("ore.menu", "")   -- the "Connecting..." menu goes
             if not cleria.mods.command("ore.new_game", args) then
-                go.note = "The game could not be started from here."
-                cleria.ui.open("ap_setup")
+                go.note = "The game could not be started from here"
+                go.reopen(7)
             end
-        elseif s == "refused" or (now - go.at > 2 and (s == "idle" or s == "disconnected")) then
-            go.on, go.note = false, A.session:status_text(now)
-            A.disconnect()   -- (no retries behind the window)
-        elseif now - go.at > 30 then
-            go.on, go.note = false, "No answer from the room."
+        elseif s == "refused" or (now - go.at > 2 and (s == "idle" or s == "disconnected")) or now - go.at > 30 then
+            go.on, go.note = false, s == "refused" and "The room refused the connection" or "Could not connect to the room"
+            log("new game: " .. A.session:status_text(now))
+            A.disconnect()   -- (no retries behind the menu)
+            cleria.mods.command("ore.menu", "")
+            go.reopen(7)
         end
     end
 end)
