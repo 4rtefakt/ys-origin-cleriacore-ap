@@ -42,6 +42,13 @@ end
 
 function M.install(A, persist)
     local cfg, c = A.cfg, nil
+    -- the seed's locations found: by this save, or known to the server as checked (a !release after the goal, a
+    -- !collect, another client of the same slot), which the save itself never saw
+    local function found()
+        local n, srv = 0, A.connected() and A.session.client.checked or {}
+        for _, r in ipairs(A.logic.regs) do if A.logic.st.checks[r.id] or srv[r.id] then n = n + 1 end end
+        return n
+    end
 
     -- the item feed, top right: the last 6 lines of 10 s [H], fading
     cleria.hud.layer("feed", function(d)
@@ -89,7 +96,7 @@ function M.install(A, persist)
         local px = 14.5 * S
         local t = "AP  " .. (A.mismatch == "" and A.session:status_text(cleria.time()) or A.mismatch)
         if s == "connected" and A.logic.configured then
-            local done = ys.count(A.logic.st.checks)
+            local done = found()
             t = t .. "  \u{2022}  " .. done .. "/" .. #A.logic.regs .. " checks"
             if A.in_logic then t = t .. "  \u{2022}  " .. done .. "/" .. A.in_logic .. " in logic (" .. A.logic_left .. " left)" end
         end
@@ -303,7 +310,8 @@ function M.install(A, persist)
                "The seed this save belongs to. A save is stamped the first time it is played connected.")
         p:info("Items received", st.applied .. " / " .. #cl.received,
                "Items granted into this save / items the server has sent. Saved with the game: a reload never grants twice.")
-        p:info("Locations checked", ys.count(st.checks) .. " / " .. #A.logic.regs, "Locations this save has found, of the seed's active ones.")
+        p:info("Locations checked", found() .. " / " .. #A.logic.regs, "The seed's active locations found by this save, or checked on the server " ..
+               "(a release after the goal, a collect).")
         p:info("Goal", st.goal_sent and "Complete" or "Not yet", {color = st.goal_sent and "good" or "muted",
                desc = A.logic.opt.goal == 1 and "Defeat every floor boss and the final boss." or "Defeat the final boss."})
         if A.active() then
