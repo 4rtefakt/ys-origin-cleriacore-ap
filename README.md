@@ -105,11 +105,10 @@ complete; and under *This game*, whether you hold the three **elemental skills**
 | option | |
 |---|---|
 | `character`, `goal`, `death_link`, `location_signals` / `location_detect`, `suppress_items`, `suppress_give_ids`, `item_index`, `skill_grants`, `sp_items`, `progressive_gear` / `progressive_skills` / `progressive_blessings`, `start_items` / `start_weapon` / `start_level`, `level_scaling` and its EXP keys (`level_margin`, `exp_base_mult`, `exp_catchup_mult`, `exp_catchup_margin`, `scene_levels`), `scene_floors`, `scene_names`, `statue_warp_locks` + `statue_unlocks` + `start_statue_scene`, `random_start`, `roo_flags` | supported |
-| `blessing_items` (the purchase is the check, the effect becomes an item) | **not supported**: the purchase still checks, but the vanilla effect is also given |
-| `blessing_costs`, `blessing_vanilla_price_map`, `blessing_shop_unlock`, `shop_hints` | **not supported** (the shop's prices and pacing stay vanilla) |
+| `blessing_items` (the purchase is the check, the effect becomes an item) | supported with mod API 5 (`cleria.shop`): the purchase sends the check and applies nothing, a bought row reads [Done] and a received effect leaves its slot on sale. Older builds give the vanilla effect with the check |
+| `blessing_costs`, `blessing_vanilla_price_map`, `blessing_shop_unlock`, `shop_hints` | supported with mod API 5: the statue menu charges the seed's prices, one more slot goes on sale per floor visited (progression never waits), and a row names what its location holds. Older builds keep the vanilla prices and pacing |
 | `weapon_requirements`, `item_tiers`, `scene_locations`, `floor_locations`, `blessing_names` | logic / tracker data; not needed by the client |
 
-For now, generate with `blessing_items` and shuffled blessing costs off.
 
 
 ## Files
@@ -132,6 +131,9 @@ against the scripted local server `tools/ap_mock_server.py` (a chest check, rece
 load, DeathLink both ways, a statue unlock + traps + the goal, the seed guard, the mod with no slot), and
 `cleria-luatest` starts the mod against a fake game. Untested without a real server: a full TLS session
 to archipelago.gg, a real MultiServer's packet order, release / collect floods, hints.
+
+Without CleriaCore: `lua5.4 .dev/shop_test.lua` checks the statue shop's answers (prices, pacing, blessing items)
+against a fake game.
 
 ## Credits
 
