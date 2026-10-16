@@ -466,7 +466,10 @@ cleria.content.add_filter(function(q)
     else
         local name = c:item_name(s.item, s.player)
         d.index = icon_of(s)
-        if s.player == c.slot then d.text = cleria.content.treasure_text(q.text, name, 1)
+        if s.player == c.slot and q.index >= 0x74 and q.index <= 0x76 and tbl.roo_loc[string.upper(q.room)] then
+            -- a gem Roo's second box, "Lightning\npower increased!": the gem's boost is withheld, so name the item
+            d.text = "Received\\n" .. rgb_tag(0xF2EA8C) .. name .. "<color:>."
+        elseif s.player == c.slot then d.text = cleria.content.treasure_text(q.text, name, 1)
         else
             -- One line when it fits (the box grows to its text; the renderer never wraps), else break
             -- before "to <player>". [H] 48 characters ~ 530 of the 1024 layout units.

@@ -417,8 +417,9 @@ function Session:open_socket(now)
     self.retry_at = -1
     self.status = "connecting"
     self.last_send = now
-    if not self.ws:open(self.address) then
-        self.status, self.reason, self.want_open = "disconnected", "not a valid server address", false
+    local ok, why = self.ws:open(self.address)
+    if not ok then   -- (the engine's reason when it gives one: no network where a mod's page runs outside the game)
+        self.status, self.reason, self.want_open = "disconnected", why or "not a valid server address", false
     end
 end
 

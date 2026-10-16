@@ -54,6 +54,35 @@ CASES = {
               "170:flag=312,1;200:lua=apflag 0x57;210:flag=87,0;215:flag=414,1;240:lua=apflag 0x57;260:quit",
         expect=["Roda Fruit: Roda Fruit #1", "Roda Fruit: Roda Fruit #2", P + "flag 0x57 = 2",
                 P + "flag 0x57 = 1", P + "flag 0x57 = 1"])),
+    # A gem Roo (8F, S_2011): its two boxes (the Topaz, then "Lightning power increased!") come before its check, in
+    # AGERU itself, and both name the seed's item; the gem's level is withheld and the check follows.
+    "port_roo_box": (dict(roo_flags=[312, 339, 362, 388, 414, 458]), dict(
+        room="S_20/S_2011/S_2011", aplua={},
+        drive="60:lua=apsay !give Roda Fruit;150:run=AGERU;" + ";".join("%d:ok" % t for t in range(300, 1500, 100)) +
+              ";1500:lua=apflag 339;1510:quit",
+        expect=["Roda Fruit: Roda Fruit #1", P + "box S_2011/AGERU: Received\\nSP: 50.",
+                P + "box S_2011/AGERU: Received\\nSP: 50.", P + "check 5857533 Flooded Prison: 8F Path 2 — Roo Trade (store)",
+                P + "suppressed g_flags[0xB7] 0 -> 1 (S_2011/AGERU)", P + "flag 0x153 = 1"],
+        absent=["power increased"])),
+    # An elemental altar (S_2009) whose skill the seed moved: the skill withheld, the check sent, then the event
+    # ended there (mod API 7, cleria.script.stop) with the HUD it hid (flag 185) back and the world running.
+    "port_altar": (dict(), dict(
+        room="S_20/S_2009/S_2009", aplua={},
+        drive="10:killall;150:run=TalkC940;300:scripts;310:lua=apflag 0x75;320:lua=apflag 185;330:quit",
+        expect=[P + "suppressed g_flags[0x75] -1 -> 1 (S_2009/TALKC940)",
+                P + "check 5857538 Flooded Prison: Skill Room — Levinstrike Warhammer (store)",
+                P + "altar: TalkC940 ended after its check (its skill is another world's)", "frozen 0",
+                P + "flag 0x75 = -1", P + "flag 0xB9 = 1"],
+        absent=["script TalkC940"])),
+    # The EXP base / catch-up sliders: the fixture's seed multiplies a kill's EXP by 20 (level_scaling 2); with both
+    # set to 2 the same five kills give 102, not 1029. The kills wait for the login (the factor is 1 before it).
+    "port_exp_override": (dict(), dict(
+        room="S_10/S_1002/S_1002", aplua={}, ini_extra="""ExpBase=2
+ExpCatchup=2
+""",
+        drive="8:opt=DamageDealt=10;10:opt=DamageTaken=0;300:lua=apstate;314:stats;" +
+              ";".join("%d:near=17;%d:atk" % (t, t + 1) for t in range(340, 441, 25)) + ";450:stats;460:quit",
+        expect=["active 1", "stats exp 0 lv 1", "stats exp 102 lv 1"])),
     # Random start: a new game in S_1001 is warped to the seed's start statue once.
     "port_random_start": (dict(random_start=True, start_statue_scene=1009), dict(
         room="S_10/S_1001/S_1001", aplua={},
@@ -196,7 +225,7 @@ ShowTracker=1
 }
 
 exe = os.environ.get("CLERIA_EXE") or os.path.join(CC, "build_diff", "Release", "cleria-view.exe")
-assets = os.path.join(CC, "assets")
+assets = os.environ.get("CLERIA_ASSETS") or os.path.join(CC, "assets")
 _start = aplua_regress.start
 
 
