@@ -107,6 +107,7 @@ beside `cleria.ini`.
 | **Skip the intro on a random start** | on | A random-start New Game skips its intro (cutscenes and movies) until you stand at the start statue. Needs mod API 7. |
 | **Hint alerts** | on | A feed line when you enter a room that holds a hinted item. |
 | **EXP multiplier** | 0 | Your own multiplier for every kill; 0 keeps the seed's. |
+| ...base / ...catch-up | 0 | With the EXP multiplier at 0, on a seed whose level scaling multiplies EXP: your own base and catch-up multipliers in place of the seed's (the retail client's `exp_mult_base` / `exp_mult_catchup`); 0 keeps the seed's. |
 | **Seed save folder** | on | This seed's saves in a folder of their own. Off: the normal saves. |
 | **Warp map counts** | on | Each floor's checks found / total on the warp map. |
 

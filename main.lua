@@ -30,6 +30,7 @@ local cfg = {
     show_room = S.get("ShowRoom", false), room_spoil = S.get("RoomSpoilers", false), tracker_mode = S.get("TrackerMode", 1),
     boss_on_kill = S.get("BossOnKill", false),
     hint_alerts = S.get("HintAlerts", true), exp_mult = S.get("ExpMultiplier", 0),
+    exp_base = S.get("ExpBase", 0), exp_catchup = S.get("ExpCatchup", 0),
     autosave = S.get("Autosave", true), autosave_slot = S.get("AutosaveSlot", 8),
     seed_saves = S.get("SeedSaves", true), show_warpmap = S.get("ShowWarpMap", true),
     -- cutscenes: 1 off, 2 while the "skip" key is held (Right Ctrl), 3 always [MOD cutscene_skip, default hold]
@@ -39,7 +40,7 @@ local cfg_keys = {server = "Server", slot = "Slot", password = "Password", uuid 
                   auto_connect = "AutoConnect", show_status = "ShowStatus", show_feed = "ShowFeed",
                   show_tracker = "ShowTracker", export_state = "ExportState", show_room = "ShowRoom",
                   room_spoil = "RoomSpoilers", tracker_mode = "TrackerMode", boss_on_kill = "BossOnKill",
-                  hint_alerts = "HintAlerts", exp_mult = "ExpMultiplier",
+                  hint_alerts = "HintAlerts", exp_mult = "ExpMultiplier", exp_base = "ExpBase", exp_catchup = "ExpCatchup",
                   autosave = "Autosave", autosave_slot = "AutosaveSlot", seed_saves = "SeedSaves",
                   show_warpmap = "ShowWarpMap", cutscene_skip = "CutsceneSkip", skip_intro = "SkipIntro"}
 local function persist(k) S.set(cfg_keys[k], cfg[k]) end
@@ -555,7 +556,7 @@ end)
 local function exp_mult(level)
     if not active() then return 1 end
     if cfg.exp_mult > 0 then return cfg.exp_mult end
-    return A.logic:exp_factor(level)
+    return A.logic:exp_factor(level, cfg.exp_base, cfg.exp_catchup)
 end
 cleria.game.exp_factor(exp_mult)
 -- a kill gives at least half the multiplier (mod API 6): the game's cut for a monster far below the player's

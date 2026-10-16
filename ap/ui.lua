@@ -391,6 +391,15 @@ function M.install(A, persist)
         cfg.exp_mult, changed = p:slider("EXP multiplier", cfg.exp_mult, 0, 100, 1, "%.0f", "Your own EXP multiplier for every kill. " ..
             "0 = the seed's setting. Not a retail option.")
         if changed then cfg.exp_mult = math.tointeger(math.floor(cfg.exp_mult + 0.5)) or 0 persist("exp_mult") end
+        local scaled = A.logic.opt.level_scaling == 2 or A.logic.opt.level_scaling == 3
+        cfg.exp_base, changed = p:slider("...base", cfg.exp_base, 0, 100, 1, "%.0f", {desc = "Replaces the seed's base EXP " ..
+            "multiplier (above the catch-up range). 0 = the seed's. Only on a seed whose level scaling multiplies EXP, and " ..
+            "only while the EXP multiplier above is 0.", enabled = cfg.exp_mult == 0 and scaled})
+        if changed then cfg.exp_base = math.tointeger(math.floor(cfg.exp_base + 0.5)) or 0 persist("exp_base") end
+        cfg.exp_catchup, changed = p:slider("...catch-up", cfg.exp_catchup, 0, 100, 1, "%.0f", {desc = "Replaces the seed's " ..
+            "catch-up multiplier (while your level is at or under the deepest floor's expected level plus the margin). 0 = the " ..
+            "seed's.", enabled = cfg.exp_mult == 0 and scaled})
+        if changed then cfg.exp_catchup = math.tointeger(math.floor(cfg.exp_catchup + 0.5)) or 0 persist("exp_catchup") end
         p:section("Overlays")
         cfg.show_status, changed = p:toggle("Connection line", cfg.show_status, "The connection status, top left.")
         if changed then persist("show_status") end

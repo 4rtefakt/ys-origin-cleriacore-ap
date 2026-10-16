@@ -826,12 +826,14 @@ function Logic:goal_reached(sc)
     return true
 end
 
--- EXP scaling: level_scaling 2/3 multiply, 1/3 raise the level [MOD 2537-2560]
-function Logic:exp_factor(level)
+-- EXP scaling: level_scaling 2/3 multiply, 1/3 raise the level [MOD 2537-2560]. `base` / `catchup` (> 0) replace the
+-- seed's two multipliers, as the retail client's exp_mult_base / exp_mult_catchup do.
+function Logic:exp_factor(level, base, catchup)
     local o = self.opt
     if o.level_scaling ~= 2 and o.level_scaling ~= 3 then return 1 end
     local catching_up = self.expected_hi > 0 and level <= self.expected_hi + o.exp_catchup_margin
-    return catching_up and o.exp_catchup_mult or o.exp_base_mult
+    if catching_up then return (catchup and catchup > 0) and catchup or o.exp_catchup_mult end
+    return (base and base > 0) and base or o.exp_base_mult
 end
 function Logic:level_floor(level)
     local o = self.opt
