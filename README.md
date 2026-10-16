@@ -1,4 +1,15 @@
+<div align="center">
+
 # Archipelago for Ys Origin (a CleriaCore mod)
+
+[![Latest release](https://img.shields.io/github/v/release/4rtefakt/ys-origin-cleriacore-ap?label=release&color=2f9e44)](https://github.com/4rtefakt/ys-origin-cleriacore-ap/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/4rtefakt/ys-origin-cleriacore-ap/total?color=4c6ef5)](https://github.com/4rtefakt/ys-origin-cleriacore-ap/releases)
+[![Archipelago](https://img.shields.io/badge/Archipelago-multiworld-e64980)](https://archipelago.gg)
+[![apworld](https://img.shields.io/badge/apworld-2.0.1%2B-f08c00)](https://github.com/4rtefakt/ys-origin-archipelago)
+![Runs on](https://img.shields.io/badge/runs%20on-CleriaCore%20%C2%B7%20CleriaOre-7048e8)
+![Lua](https://img.shields.io/badge/Lua-5.4-000080?logo=lua)
+
+</div>
 
 > **Status: 0.2.0, early.** Tested end to end against a scripted local Archipelago server, not yet
 > against a real multiworld: please report anything odd. Made for **Ys Origin apworld 2.0.1 or newer**. **CleriaCore is not public yet**, so this
