@@ -171,6 +171,15 @@ ShowTracker=1
         drive=drive_regress.CLEANSE + ";200:sp=250;210:lua=apflag 152;220:act;290:down;300:ok;390:down;400:ok;480:ok;"
               "570:ok;650:ok;730:ok;820:esc;835:stats;840:quit",
         expect=["sp 250"], absent=["blessing_bought", "not supported: Blessing shop pacing"])),
+    # blessing_items: the same purchase is the check and nothing else; the heal rate's bit (0 of flag 217) stays
+    # unset, its effect being an item of the pool. (Not run yet: written without a CleriaCore build at hand.)
+    "port_shop_blessing_items": (dict(blessing_items=True, blessing_costs={"5857332": 70}), dict(
+        room="S_10/S_1009/S_1009", aplua={},
+        drive=drive_regress.CLEANSE + ";200:sp=250;220:act;290:down;300:ok;390:down;400:ok;480:ok;570:ok;650:ok;"
+              "730:ok;820:esc;835:stats;836:lua=apflag 217;840:quit",
+        expect=[P + "blessing 0 bought for 70 SP: its effect is an item of the seed",
+                "check 5857332 Divine Blessing: Increase stationary heal rate", P + "flag 0xD9 = 0"],
+        absent=["not supported: Blessing items"])),
     # The "in logic" count from slot_data.logic: two checks made on entry (region 1), a blessing in region 1
     # that needs an item those checks send (SP: 50), and the statue in a region behind an item never received.
     "port_in_logic": (dict(logic=dict(regions=["Menu", "A", "B"],

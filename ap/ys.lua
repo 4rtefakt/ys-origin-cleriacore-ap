@@ -164,19 +164,31 @@ local function parse_slot_options(sd)
     for k, v in pairs(obj(sd.scene_floors)) do o.scene_floors[tonumber(k)] = to_int(v, 0) end
     for k, v in pairs(obj(sd.scene_names)) do o.scene_names[tonumber(k)] = v end
     o.blessing_items = sd.blessing_items == true
+    local shop_api = cleria.shop and cleria.shop.add_filter and true or false
     o.random_start = sd.random_start == true
     -- the flag each Roo sets when fed, in the apworld's logic order (2.0: the k-th Roo needs k fruits)
     o.roo_flags = {}
     for _, f in ipairs(ints(sd.roo_flags)) do if f >= 0 and f < 0x200 then o.roo_flags[#o.roo_flags + 1] = f end end
-    if o.blessing_items then o.unsupported[#o.unsupported + 1] = "Blessing items (the shop purchase is not intercepted)" end
-    -- the statue shop's seed prices, location id -> SP (the shop filter of mod API 5 charges them)
-    o.blessing_costs, o.shop_hints = {}, sd.shop_hints ~= false
+    -- blessing_items: the purchase is the check and its effect an item of the pool, so the shop filter keeps
+    -- the effect from being applied and the purchase (not the effect bit) is what detects the check [MOD
+    -- ap_on_blessing_purchase]. Without the shop hooks the vanilla effect comes with the check.
+    o.bless_by_purchase = o.blessing_items and shop_api
+    if o.blessing_items and not shop_api then
+        o.unsupported[#o.unsupported + 1] = "Blessing items (this CleriaCore has no shop hooks: the vanilla effect is also given)"
+    end
+    -- the statue shop's seed prices, location id -> SP (the shop filter of mod API 5 charges them), and the
+    -- same prices by the vanilla one, for a blessing that is not a location of this slot [MOD g_bless_price_map]
+    o.blessing_costs, o.blessing_vanilla, o.shop_hints = {}, {}, sd.shop_hints ~= false
     for k, v in pairs(obj(sd.blessing_costs)) do o.blessing_costs[tonumber(k) or -1] = to_int(v, -1) end
-    if next(o.blessing_costs) and not (cleria.shop and cleria.shop.add_filter) then
+    for k, v in pairs(obj(sd.blessing_vanilla_price_map)) do
+        local van, new = tonumber(k), to_int(v, -1)
+        if van and van > 0 and new >= 0 then o.blessing_vanilla[van] = new end
+    end
+    if (next(o.blessing_costs) or next(o.blessing_vanilla)) and not shop_api then
         o.unsupported[#o.unsupported + 1] = "Shuffled blessing prices (this CleriaCore has no shop hooks)"
     end
     o.shop_unlock = to_int(sd.blessing_shop_unlock, 0)   -- 1: one more shop slot per distinct floor visited
-    if o.shop_unlock ~= 0 and not (cleria.shop and cleria.shop.add_filter) then
+    if o.shop_unlock ~= 0 and not shop_api then
         o.unsupported[#o.unsupported + 1] = "Blessing shop pacing (one per floor)"
     end
     return o
@@ -337,6 +349,10 @@ function Logic:fire(id, out)
     out[#out + 1] = id
 end
 
+-- a blessing's bit no longer detects its check when the effects are items: the purchase does (Logic:on_blessing),
+-- and the bit is set by receiving the effect, which says nothing about the shop slot
+function Logic:bit_by_purchase(r) return self.opt.bless_by_purchase and r.flag == kBlessFlag end
+
 -- per tick: flag / item_arr / bit locations set behind the VM
 function Logic:sweep()
     local out = {}
@@ -347,7 +363,9 @@ function Logic:sweep()
             local on = false
             if r.detect == "flag" then on = r.flag >= 0 and r.flag < 0x200 and G.flag(r.flag) >= 1
             elseif r.detect == "item_arr" then on = r.index >= 0 and r.index < 54 and (G.upgrade(r.index) or 0) >= 1
-            elseif r.detect == "bit" then on = r.flag >= 0 and r.flag < 0x200 and ((G.flag(r.flag) & 0xFFFFFFFF) >> r.bit) & 1 ~= 0 end
+            elseif r.detect == "bit" and not self:bit_by_purchase(r) then
+                on = r.flag >= 0 and r.flag < 0x200 and ((G.flag(r.flag) & 0xFFFFFFFF) >> r.bit) & 1 ~= 0
+            end
             if on then st.checks[r.id] = true out[#out + 1] = r.id end
         end
     end
@@ -390,7 +408,7 @@ function Logic:on_store(index, old, value)
     for _, r in ipairs(self.regs) do
         if r.flag == index then
             if r.detect == "flag" and value >= 1 and old < 1 then self:fire(r.id, out) end
-            if r.detect == "bit" and (((value & 0xFFFFFFFF) & ~(old & 0xFFFFFFFF)) >> r.bit) & 1 ~= 0 then self:fire(r.id, out) end
+            if r.detect == "bit" and not self:bit_by_purchase(r) and (((value & 0xFFFFFFFF) & ~(old & 0xFFFFFFFF)) >> r.bit) & 1 ~= 0 then self:fire(r.id, out) end
         end
     end
     return out
@@ -427,14 +445,72 @@ function Logic:bless_reg(index)
 end
 
 -- one_per_floor: the priced slots, cheapest first; slot i is on sale once i distinct floors + 1 were visited.
--- A slot holding progression is never held back [MOD shop_item_unlocked].
+-- A slot holding progression is never held back [MOD shop_item_unlocked]. -> the floors still to visit, or nil.
 function Logic:shop_locked(r, progression)
-    if self.opt.shop_unlock ~= 1 or progression or not self.opt.blessing_costs[r.id] then return false end
+    if self.opt.shop_unlock ~= 1 or progression or not self.opt.blessing_costs[r.id] then return nil end
     local cost, rank = self.opt.blessing_costs, 0
     for id, c in pairs(cost) do
         if c < cost[r.id] or (c == cost[r.id] and id < r.id) then rank = rank + 1 end
     end
-    return rank >= M.count(self.st.floors)
+    local need = rank + 1 - M.count(self.st.floors)
+    return need > 0 and need or nil
+end
+
+-- The statue shop (cleria.shop.add_filter, mod API 5): the answer to one query. `scouted` is the client's
+-- location id -> {item, player, flags}; `label(s)` names a scouted item for the row.
+--  * price: the seed's price for the row's location (blessing_costs), else by the vanilla price
+--    (blessing_vanilla_price_map); a slot one_per_floor has not put on sale yet costs more than any wallet.
+--    The armor / leggings ladder keeps its own prices: the seed rolls none for them [MOD ap_menu_row].
+--  * row: the price, and what the location holds when shop hints are on.
+--  * owned / buy, with blessing_items: a blessing is "applied" once its location is checked, whatever was
+--    received, so a bought row reads [Done] and a received effect does not take a slot off sale; the purchase
+--    applies nothing (the effect is an item) [MOD ap_bless_compare_price, ap_on_blessing_purchase].
+function Logic:shop_answer(q, scouted, label)
+    local o = self.opt
+    local gear = q.index == 7 or q.index == 8
+    local r = self:bless_reg(q.index)
+    local takes = o.bless_by_purchase and r ~= nil and not gear
+    if q.kind == "owned" then
+        if not takes then return nil end
+        return {action = "replace", value = self.st.checks[r.id] and 1 or 0}
+    end
+    if q.kind == "buy" then return takes and "suppress" or nil end
+    if q.kind ~= "price" and q.kind ~= "row" then return nil end
+    if gear and not r then return nil end
+    local price = not gear and r and o.blessing_costs[r.id] or nil
+    if price and price < 0 then price = nil end
+    if not r then   -- a blessing that is no location of this slot: only the vanilla price map applies
+        if q.kind ~= "price" or gear then return nil end
+        local v = o.blessing_vanilla[q.value]
+        return v and {action = "replace", value = v} or nil
+    end
+    if not price and not gear and q.kind == "price" then price = o.blessing_vanilla[q.value] end
+    local s = scouted and scouted[r.id]
+    local need = price and o.blessing_costs[r.id] and self:shop_locked(r, s ~= nil and (s.flags or 0) & 1 == 1)
+    if q.kind == "price" then
+        if need then return {action = "replace", value = 1000000} end
+        return price and {action = "replace", value = price} or nil
+    end
+    if q.value < 0 then return nil end                      -- a "[Done]" row
+    if need then
+        return {action = "replace", text = string.format("Locked: visit %d more floor%s", need, need == 1 and "" or "s")}
+    end
+    local what = o.shop_hints and s and not self.st.checks[r.id] and label and label(s) or nil
+    if not what then
+        if not price then return nil end
+        return {action = "replace", text = (q.text:gsub("%d+%s*$", tostring(price)))}
+    end
+    return {action = "replace", text = what .. " - [SP:]" .. (price or q.value)}
+end
+
+-- blessing_bought: the purchase of a blessing is its location's check (with blessing_items the only way it is
+-- detected; otherwise the effect bit says the same a tick later)
+function Logic:on_blessing(index)
+    local out = {}
+    if index == 7 or index == 8 then return out end      -- the gear upgrades: their cell detects them
+    local r = self:bless_reg(index)
+    if r then self:fire(r.id, out) end
+    return out
 end
 
 function Logic:claim_cell(index)
