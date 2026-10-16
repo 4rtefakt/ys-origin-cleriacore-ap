@@ -32,6 +32,8 @@ local cfg = {
     hint_alerts = S.get("HintAlerts", true), exp_mult = S.get("ExpMultiplier", 0),
     autosave = S.get("Autosave", true), autosave_slot = S.get("AutosaveSlot", 8),
     seed_saves = S.get("SeedSaves", true), show_warpmap = S.get("ShowWarpMap", true),
+    -- cutscenes: 1 off, 2 while the "skip" key is held (Right Ctrl), 3 always [MOD cutscene_skip, default hold]
+    cutscene_skip = S.get("CutsceneSkip", 2), skip_intro = S.get("SkipIntro", true),
 }
 local cfg_keys = {server = "Server", slot = "Slot", password = "Password", uuid = "Uuid", death_link = "DeathLink",
                   auto_connect = "AutoConnect", show_status = "ShowStatus", show_feed = "ShowFeed",
@@ -39,7 +41,7 @@ local cfg_keys = {server = "Server", slot = "Slot", password = "Password", uuid 
                   room_spoil = "RoomSpoilers", tracker_mode = "TrackerMode", boss_on_kill = "BossOnKill",
                   hint_alerts = "HintAlerts", exp_mult = "ExpMultiplier",
                   autosave = "Autosave", autosave_slot = "AutosaveSlot", seed_saves = "SeedSaves",
-                  show_warpmap = "ShowWarpMap"}
+                  show_warpmap = "ShowWarpMap", cutscene_skip = "CutsceneSkip", skip_intro = "SkipIntro"}
 local function persist(k) S.set(cfg_keys[k], cfg[k]) end
 
 -- ---- the runtime state ---------------------------------------------------------------------------------------
@@ -645,8 +647,27 @@ local function count_logic()
     A.in_logic, A.logic_left = n, left
 end
 
+-- The cutscene skip (cleria.game.skip_cutscenes, API 7): held by the "skip" key or always, as the player chose, and
+-- from a random-start New Game until its warp to the start statue, so the intro does not play first [MOD force_spawn,
+-- cutscene_ff_poll]. CleriaCore skips each cutscene and movie whole; CleriaOre collapses their waits and leaves
+-- the intro movies out.
+local function want_skip()
+    if cfg.cutscene_skip == 3 then return true end
+    if cfg.cutscene_skip == 2 and cleria.input and cleria.input.down and cleria.input.down("skip") then return true end
+    return cfg.skip_intro and A.in_game and A.logic.st.started and A.logic:spawn_warp() ~= nil
+end
+local function skip_tick()
+    if not G.skip_cutscenes then return end
+    local on = want_skip() == true
+    if on ~= (A.skip_on == true) then
+        A.skip_on = on
+        G.skip_cutscenes(on)
+    end
+end
+
 cleria.events.on("tick", function()
     A.ticks = A.ticks + 1
+    skip_tick()
     if A.ticks % 30 == 0 then count_logic() end
     if A.fog_t > 0 then A.fog_t = A.fog_t - 1 end
     if not A.in_game or not cleria.save.ready() then A.last_level = nil write_state() return end

@@ -255,6 +255,10 @@ function M.install(A, persist)
         end)
     end
 
+    if cleria.input and cleria.input.action then
+        cleria.input.action("skip", {label = "Skip cutscenes (hold)", key = "Right Ctrl"})
+    end
+
     -- the page: F1 > Mods > Archipelago
     cleria.ui.page("Archipelago", function(p)
         local s = A.session.status
@@ -373,6 +377,15 @@ function M.install(A, persist)
             "is won, not when you walk in (the floor bosses, the duels and the 20F ward; the 17F room has no fight and stays on entry). " ..
             "Not a retail option.")
         if changed then persist("boss_on_kill") end
+        local can_skip = G.skip_cutscenes ~= nil
+        cfg.cutscene_skip, changed = p:choice("Cutscene skip", cfg.cutscene_skip, {"Off", "Hold Right Ctrl", "Always"},
+            {desc = "Hold: cutscenes go by while the key is held (rebind it under Controls). Always: every cutscene " ..
+            "goes by on its own; what you start yourself (a talk, a statue, a shop) still plays. CleriaCore skips each " ..
+            "one whole; CleriaOre fast-forwards it. Needs mod API 7.", enabled = can_skip})
+        if changed then persist("cutscene_skip") end
+        cfg.skip_intro, changed = p:toggle("Skip the intro on a random start", cfg.skip_intro, {desc = "On a seed with a " ..
+            "random start, a New Game skips its intro until you stand at the start statue. Needs mod API 7.", enabled = can_skip})
+        if changed then persist("skip_intro") end
         cfg.hint_alerts, changed = p:toggle("Hint alerts", cfg.hint_alerts, "A feed line when you enter a room that holds a hinted item.")
         if changed then persist("hint_alerts") end
         cfg.exp_mult, changed = p:slider("EXP multiplier", cfg.exp_mult, 0, 100, 1, "%.0f", "Your own EXP multiplier for every kill. " ..
