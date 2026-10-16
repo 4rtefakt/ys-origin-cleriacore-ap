@@ -61,7 +61,7 @@ CASES = {
         drive="60:lua=apsay !give Roda Fruit;150:run=AGERU;" + ";".join("%d:ok" % t for t in range(300, 1500, 100)) +
               ";1500:lua=apflag 339;1510:quit",
         expect=["Roda Fruit: Roda Fruit #1", P + "box S_2011/AGERU: Received\\nSP: 50.",
-                P + "box S_2011/AGERU: Received\\nSP: 50.", P + "check 5857533 Flooded Prison: 8F Path 2 — Roo Trade (store)",
+                P + "box S_2011/AGERU: Received\\nSP: 50.", P + "check 5857533 Flooded Prison: 8F Path 2 ", "Roo Trade (store)",
                 P + "suppressed g_flags[0xB7] 0 -> 1 (S_2011/AGERU)", P + "flag 0x153 = 1"],
         absent=["power increased"])),
     # An elemental altar (S_2009) whose skill the seed moved: the skill withheld, the check sent, then the event
@@ -70,7 +70,7 @@ CASES = {
         room="S_20/S_2009/S_2009", aplua={},
         drive="10:killall;150:run=TalkC940;300:scripts;310:lua=apflag 0x75;320:lua=apflag 185;330:quit",
         expect=[P + "suppressed g_flags[0x75] -1 -> 1 (S_2009/TALKC940)",
-                P + "check 5857538 Flooded Prison: Skill Room — Levinstrike Warhammer (store)",
+                P + "check 5857538 Flooded Prison: Skill Room ", "Levinstrike Warhammer (store)",
                 P + "altar: TalkC940 ended after its check (its skill is another world's)", "frozen 0",
                 P + "flag 0x75 = -1", P + "flag 0xB9 = 1"],
         absent=["script TalkC940"])),
