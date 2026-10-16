@@ -74,7 +74,7 @@ function M.load_table(path)
     local doc, perr = cleria.json.decode(text)
     if not doc then return nil, path .. ": " .. perr end
     if doc.format ~= 1 or doc.game ~= "Ys Origin" then return nil, "not a Ys Origin table (format 1)" end
-    local t = {locations = {}, items = {}, loc = {}, item = {}, scene_names = {}, scene_floors = {}, chest_loc = {}}
+    local t = {locations = {}, items = {}, loc = {}, item = {}, scene_names = {}, scene_floors = {}, chest_loc = {}, roo_loc = {}}
     for k, v in pairs(obj(doc.scene_names)) do t.scene_names[tonumber(k)] = v end
     for k, v in pairs(obj(doc.scene_floors)) do t.scene_floors[tonumber(k)] = to_int(v, 0) end
     for _, j in ipairs(doc.locations) do
@@ -87,6 +87,16 @@ function M.load_table(path)
         if type(j.chest) == "table" then
             l.box_flag, l.script = to_int(j.chest.box_flag, -1), j.chest.script
             t.chest_loc[string.upper(l.key)] = l.id
+        end
+        -- a Roo trade (S_nnnn/AGERU/<flag>): its room, and the items its vanilla "Acquired" box can show
+        local roo_room = string.upper(l.key or ""):match("^(S_%d+)/AGERU/")
+        if roo_room then
+            local items = {}
+            for _, v in ipairs(type(j.vanilla) == "table" and j.vanilla or {}) do
+                local n = to_int(obj(v).item, -1)
+                if n >= 0 and n < 0x80 then items[n] = true end   -- a game item (the Topaz, 0x301, is not one)
+            end
+            t.roo_loc[roo_room] = {id = l.id, items = items}
         end
         t.locations[#t.locations + 1] = l
         t.loc[l.id] = l

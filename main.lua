@@ -378,12 +378,23 @@ local function icon_of(it)
     return kApIcon
 end
 
+local kRodaFruit = 0x57   -- the item a Roo is fed
+
 -- the location whose box this is: a chest by its key, else the location the same script just found
 local function box_location(q)
     if q.script ~= "" then
         local id = tbl.chest_loc[q.room .. "/" .. string.upper(q.script)]
         if id and A.logic:reg(id) then return id end
         if q.script == A.fired_script and A.ticks - A.fired_tick < 600 then return A.fired_loc end   -- [H] 10 s
+    end
+    -- A Roo's reward box does not follow its check in the same script (reported on CleriaCore and CleriaOre: the
+    -- vanilla "Acquired" box after a Roda Fruit). In a Roo's room, the box of one of its vanilla rewards is its
+    -- location's, whichever script shows it and whether its check came first or not; where the table names no
+    -- game item for it (S_2011, S_6009: the Roo is the room's only location), any box but the fruit handed over.
+    local roo = tbl.roo_loc[string.upper(q.room)]
+    if roo and q.kind == "window" and q.index ~= kRodaFruit and A.logic:reg(roo.id)
+        and (roo.items[q.index] or next(roo.items) == nil) then
+        return roo.id
     end
     return nil
 end
