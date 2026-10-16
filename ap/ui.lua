@@ -45,7 +45,7 @@ function M.install(A, persist)
 
     -- the item feed, top right: the last 6 lines of 10 s [H], fading
     cleria.hud.layer("feed", function(d)
-        if not cfg.show_feed or #A.feed == 0 then return end
+        if A.hud_hidden or not cfg.show_feed or #A.feed == 0 then return end
         local now, S = cleria.time(), d.scale
         local px, bw, pad = 16 * S, 430 * S, 10 * S
         local shown = 0
@@ -84,7 +84,7 @@ function M.install(A, persist)
     -- the connection line, top left
     cleria.hud.layer("status", function(d)
         local s = A.session.status
-        if not cfg.show_status or (s == "idle" and A.logic.st.seed == "") then return end
+        if A.hud_hidden or not cfg.show_status or (s == "idle" and A.logic.st.seed == "") then return end
         local S = d.scale
         local px = 14.5 * S
         local t = "AP  " .. (A.mismatch == "" and A.session:status_text(cleria.time()) or A.mismatch)
@@ -103,7 +103,7 @@ function M.install(A, persist)
 
     -- the tracker, left: checked / total per zone of the active locations, in tower order
     cleria.hud.layer("tracker", function(d)
-        if not cfg.show_tracker or not A.logic.configured then return end
+        if A.hud_hidden or not cfg.show_tracker or not A.logic.configured then return end
         local zones, lowest, order = {}, {}, {}
         local floors = cfg.tracker_mode == 2
         for _, r in ipairs(A.logic.regs) do
@@ -137,7 +137,7 @@ function M.install(A, persist)
 
     -- "left in this room", bottom left: the room's locations still to find; with spoilers, what each holds
     cleria.hud.layer("room", function(d)
-        if not cfg.show_room or not A.active() then return end
+        if A.hud_hidden or not cfg.show_room or not A.active() then return end
         local left = A.logic:left_in_room(A.logic.scene)
         if #left == 0 then return end
         local cl = A.session.client
@@ -186,7 +186,7 @@ function M.install(A, persist)
     local function map_open() return G.state ~= nil and G.state() == "map" end
     A.map_open = map_open
     cleria.hud.layer("warpmap", function(d)
-        if not cfg.show_warpmap or not A.active() or not map_open() then return end
+        if A.hud_hidden or not cfg.show_warpmap or not A.active() or not map_open() then return end
         local s = math.min(d.w / 1024, d.h / 768)
         local ox, oy = (d.w - 1024 * s) / 2, (d.h - 768 * s) / 2
         local px = 30 * d.scale
@@ -257,6 +257,11 @@ function M.install(A, persist)
 
     if cleria.input and cleria.input.action then
         cleria.input.action("skip", {label = "Skip cutscenes (hold)", key = "Right Ctrl"})
+        -- Insert hides the feed, the status line, the tracker and the counts for a clean screen, as the
+        -- retail client's overlay toggle did (the Blinding Fog trap stays)
+        cleria.input.action("overlay", {label = "Hide / show the Archipelago overlay", key = "Insert"}, function()
+            A.hud_hidden = not A.hud_hidden
+        end)
     end
 
     -- the page: F1 > Mods > Archipelago
