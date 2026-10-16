@@ -691,10 +691,8 @@ end
 local function skip_tick()
     if not G.skip_cutscenes then return end
     local on = want_skip() == true
-    if on ~= (A.skip_on == true) then
-        A.skip_on = on
-        G.skip_cutscenes(on)
-    end
+    -- CleriaCore answers false outside a game (on the title): asked again each tick until it takes
+    if on ~= (A.skip_on == true) and G.skip_cutscenes(on) then A.skip_on = on end
 end
 
 cleria.events.on("tick", function()
