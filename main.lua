@@ -516,7 +516,6 @@ local function withheld_notice()
     if G.flag(w.index) >= 1 then return end                                                    -- already owned
     local name = G.item_name(w.index) or string.format("item 0x%X", w.index)
     log("withheld: the game's own " .. name .. " (the seed's comes from the multiworld)")
-    feed_text("The game's own " .. name .. " is withheld: yours comes from the multiworld.", 0xE6B040)
 end
 
 cleria.events.on("room_enter", function(e)
