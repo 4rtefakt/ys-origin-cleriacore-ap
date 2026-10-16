@@ -16,6 +16,7 @@ local ys = require("ap.ys")
 local J = cleria.json
 local G = cleria.game
 
+local kApworld = {2, 2}   -- the newest apworld (major.minor) whose rules this mod knows
 local kApIcon = 0x2A1   -- this mod's icon id for "another world's item" (cleria.ui.icon: mod icons are 0x200..0x3FF)
 
 -- ---- settings: cleria.ini [cleria.mod.ysorigin.archipelago] ----------------------------------------------
@@ -30,13 +31,15 @@ local cfg = {
     boss_on_kill = S.get("BossOnKill", false),
     hint_alerts = S.get("HintAlerts", true), exp_mult = S.get("ExpMultiplier", 0),
     autosave = S.get("Autosave", true), autosave_slot = S.get("AutosaveSlot", 8),
+    seed_saves = S.get("SeedSaves", true), show_warpmap = S.get("ShowWarpMap", true),
 }
 local cfg_keys = {server = "Server", slot = "Slot", password = "Password", uuid = "Uuid", death_link = "DeathLink",
                   auto_connect = "AutoConnect", show_status = "ShowStatus", show_feed = "ShowFeed",
                   show_tracker = "ShowTracker", export_state = "ExportState", show_room = "ShowRoom",
                   room_spoil = "RoomSpoilers", tracker_mode = "TrackerMode", boss_on_kill = "BossOnKill",
                   hint_alerts = "HintAlerts", exp_mult = "ExpMultiplier",
-                  autosave = "Autosave", autosave_slot = "AutosaveSlot"}
+                  autosave = "Autosave", autosave_slot = "AutosaveSlot", seed_saves = "SeedSaves",
+                  show_warpmap = "ShowWarpMap"}
 local function persist(k) S.set(cfg_keys[k], cfg[k]) end
 
 -- ---- the runtime state ---------------------------------------------------------------------------------------
@@ -45,7 +48,7 @@ local A = {
     live_from = 0, await_login_items = false, fired_script = "", fired_loc = 0, ticks = 0, fired_tick = 0,
     death_pending = false, death_from = "", death_cause = "", death_at = -100, death_ours = false, death_ours_tick = 0,
     fog_t = 0, butter_t = 0, butter_tier = 0, chaos_pending = 0, leech_pending = 0,
-    feed = {}, log = {}, state_dirty = true, state_at = -10, rng = 0xA9,
+    feed = {}, chat = {}, prints = {}, log = {}, state_dirty = true, state_at = -10, rng = 0xA9,
     hints = {}, chat_text = "", hint_text = "",
 }
 
@@ -62,7 +65,18 @@ local function feed_line(line)
     A.feed[#A.feed + 1] = line
     while #A.feed > 40 do table.remove(A.feed, 1) end
 end
-local function feed_text(s, rgb) feed_line(text.line(s, rgb)) end
+-- the chat window's scrollback (ap/ui.lua): every server line and every feed line, 60 kept [MOD chat.cpp kKeep]
+local function chat_line(line)
+    A.chat[#A.chat + 1] = line
+    while #A.chat > 60 do table.remove(A.chat, 1) end
+end
+A.chat_line = chat_line
+local function feed_text(s, rgb)
+    local l = text.line(s, rgb)
+    feed_line(l)
+    chat_line(l)
+end
+A.feed_text = feed_text
 
 local tbl, err = ys.load_table("data/ys_origin.json")
 if not tbl then error("no location table: " .. tostring(err)) end
@@ -219,6 +233,16 @@ local function on_connected()
     A.logic.st = keep
     log("connected as " .. c:player_name(c.slot) .. " (slot " .. c.slot .. ") seed " .. c:seed_name() .. ", " .. #A.logic.regs .. " locations")
     for _, u in ipairs(A.logic.opt.unsupported) do log("not supported: " .. u) end
+    -- a seed of a newer apworld (major.minor) may hold items or rules this mod has never heard of [MOD 1995-2009]
+    local av = A.logic.opt.apworld_version
+    log("seed made with apworld " .. (av ~= "" and av or "(before 2.0.2: unknown)"))
+    local am, an = av:match("^(%d+)%.(%d+)")
+    if am and (tonumber(am) > kApworld[1] or (tonumber(am) == kApworld[1] and tonumber(an) > kApworld[2])) then
+        local w = "This seed was made with apworld " .. av .. ", newer than this mod knows (" .. kApworld[1] .. "." ..
+                  kApworld[2] .. "): update the mod"
+        log("warning: " .. w)
+        feed_text("Archipelago: " .. w .. ".", 0xE6B040)
+    end
     -- a Toal seed on an install with no clear data: Character Select would not offer him
     if A.logic.opt.character == 2 and cleria.game.unlock_character then
         cleria.game.unlock_character(3)
@@ -235,7 +259,8 @@ local function on_connected()
         A.graph = nil
     end
     -- this seed's saves in their own folder, as the retail mod's archipelago_<seed> (the frame handler sets it)
-    A.want_profile = "AP_" .. c:seed_name() .. "_" .. c:player_name(c.slot)
+    -- (the page's "Seed save folder" off: the normal saves, as the retail mod's save_redirect=0)
+    A.want_profile = cfg.seed_saves and ("AP_" .. c:seed_name() .. "_" .. c:player_name(c.slot)) or ""
     local f = slot_cache(c:seed_name(), c.slot)
     if f then cleria.data.write(f, J.encode(c.slot_data)) end   -- for offline play of this seed's saves
     local ids = {}
@@ -305,7 +330,8 @@ local function handle(e)
     elseif k == "LocationInfo" then log("scouted " .. #e.items .. " location(s)")
     elseif k == "Print" then
         cleria.log("print " .. e.line.type .. ": " .. text.plain(e.line))
-        feed_line(e.line)
+        chat_line(e.line)
+        A.prints[#A.prints + 1] = e.line   -- to the feed at the end of the frame (flush_prints)
     elseif k == "DeathLink" then
         if death_link_on() then
             A.death_pending, A.death_from, A.death_cause = true, e.source, e.text
@@ -564,15 +590,33 @@ local function write_state()
 end
 
 -- ---- each frame / each tick --------------------------------------------------------------------------------------
+-- The server's lines of one frame go to the feed, except a flood (a release or a collect: more than 6 items in one
+-- go), which the feed shows as one line; the chat window keeps every line [MOD apply_items "batch"].
+local kFlood = 6
+local function flush_prints()
+    local p = A.prints
+    if #p == 0 then return end
+    A.prints = {}
+    local items = 0
+    for _, l in ipairs(p) do if l.type == "ItemSend" or l.type == "ItemCheat" then items = items + 1 end end
+    if items <= kFlood then
+        for _, l in ipairs(p) do feed_line(l) end
+        return
+    end
+    for _, l in ipairs(p) do if l.type ~= "ItemSend" and l.type ~= "ItemCheat" then feed_line(l) end end
+    feed_line(text.line(items .. " items moved at once (a release or a collect): F6 shows them all", 0xF2EA8C))
+end
+
 cleria.events.on("frame", function()
     A.session:update(cleria.time())
     for _, e in ipairs(A.session:take_events()) do handle(e) end
+    flush_prints()
     -- the save profile changes on the launcher and the title only: refused in a game, tried again each second
     local now = cleria.time()
     if A.want_profile and cleria.save.set_profile and now - (A.profile_at or -10) >= 1 then
         A.profile_at = now
         if cleria.save.set_profile(A.want_profile) then
-            log("saves: profile " .. cleria.save.profile())
+            log("saves: profile " .. (cleria.save.profile() == "" and "(the normal saves)" or cleria.save.profile()))
             A.want_profile = nil
         end
     end

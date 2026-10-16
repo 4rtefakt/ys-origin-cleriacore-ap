@@ -169,6 +169,57 @@ function M.install(A, persist)
         if #left > n then d:text(x0 + 12 * S, y, "and " .. (#left - n) .. " more", {size = px, color = "muted"}) end
     end)
 
+    -- The warp map's counts: found / total checks of each floor on its bar, while the map is open (game.state()
+    -- "map", mod API 7 with the warp-map state). The bars are the map's 22 plates, in the warp registry's order,
+    -- at their places of the 1024 x 768 layout (retail 0x701730, CleriaCore's kMapRecs), drawn 4:3 and centred.
+    -- The count sits on the plate's right end, as the retail mod's [MOD warpmap.cpp]; the floors with no plate
+    -- (no statue: 2F, 3F, 15F, 19F) are listed bottom left. Lime while checks are left, gold when all are found.
+    local kPlates = {{560, 680}, {576, 628}, {594, 580}, {608, 532}, {624, 484}, {640, 436}, {656, 388}, {672, 340},
+                     {688, 292}, {704, 244}, {720, 196}, {736, 148}, {752, 100}, {56, 432}, {100, 384}, {142, 336},
+                     {182, 288}, {226, 240}, {268, 192}, {310, 144}, {352, 96}, {392, 48}}
+    -- the floor each plate counts: the statue's floor; Rado's Annex counts 16F (no statue of its own), the summit nothing
+    local kPlateFloor = {1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 20, 21, 22, 23, 24, 25, 0}
+    local on_plate = {}
+    for _, f in ipairs(kPlateFloor) do if f > 0 then on_plate[f] = true end end
+    local kLeft, kDone = 0xAAFF33, 0xFFC83C
+    local G = cleria.game
+    local function map_open() return G.state ~= nil and G.state() == "map" end
+    A.map_open = map_open
+    cleria.hud.layer("warpmap", function(d)
+        if not cfg.show_warpmap or not A.active() or not map_open() then return end
+        local s = math.min(d.w / 1024, d.h / 768)
+        local ox, oy = (d.w - 1024 * s) / 2, (d.h - 768 * s) / 2
+        local px = 30 * d.scale
+        local checked = A.session.client.checked
+        local function put(x, y, t, col, centre)
+            local opts = {size = px, font = "bold", color = col}
+            local tw, th = d:text_size(t, opts)
+            if centre then x = x - tw / 2 end
+            y = y - (th or px) / 2
+            for _, o in ipairs({{-2, 0}, {2, 0}, {0, -2}, {0, 2}}) do
+                d:text(x + o[1] * d.scale, y + o[2] * d.scale, t, {size = px, font = "bold", color = 0x000000, alpha = 0.92})
+            end
+            d:text(x, y, t, opts)
+        end
+        for i, p in ipairs(kPlates) do
+            local f = kPlateFloor[i]
+            local found, total = A.logic:floor_count(f, checked)
+            if found then
+                put(ox + (p[1] + 205) * s, oy + (p[2] + 20) * s, found .. "/" .. total, found >= total and kDone or kLeft, true)
+            end
+        end
+        local y = oy + 630 * s
+        for f = 1, 30 do
+            if not on_plate[f] then
+                local found, total = A.logic:floor_count(f, checked)
+                if found then
+                    put(ox + 130 * s, y, f .. "F  " .. found .. "/" .. total, found >= total and kDone or kLeft, false)
+                    y = y + px * 1.15
+                end
+            end
+        end
+    end)
+
     -- the Blinding Fog trap: a grey haze fading in and out ("0" sorts it under this mod's other layers)
     cleria.hud.layer("0fog", function(d)
         local t = A.fog_t
@@ -176,6 +227,33 @@ function M.install(A, persist)
         local k = math.min(1, t / 60, (30 * 60 - t) / 60)
         d:rect(0, 0, d.w, d.h, {color = 0xC4C8CE, alpha = 205 / 255 * k})
     end)
+
+    -- The chat window (mod API 7: a window and a key of the mod's own): the room's lines, the newest at the bottom,
+    -- and a line to type a message or a server command into (!hint <item>, !help ...). F6 by default, the player's
+    -- key in the page's Keys section. The game runs on underneath; while the window is open it has the keyboard
+    -- and the pad, so typing never moves the player [MOD chat.cpp: F6, 60 lines kept, Enter sends].
+    if cleria.ui.window and cleria.input and cleria.input.action then
+        local line = ""
+        cleria.ui.window("chat", {title = "Archipelago", width = 0.6, pause = false}, function(p)
+            local first = math.max(1, #A.chat - 13)
+            if #A.chat == 0 then p:text("Nothing yet: items found and sent, hints, joins and chat show here.", {color = "muted"}) end
+            for i = first, #A.chat do p:text(text.plain(A.chat[i]), {color = A.chat[i].spans[1] and A.chat[i].spans[1].rgb or nil}) end
+            local typed, kept = p:text_field("Say", line, {empty = A.connected() and "(type, then Enter)" or "(not connected)",
+                                             desc = "A chat line, or a server command: !hint <item>, !help ... Enter sends it."})
+            if kept then
+                typed = typed:gsub("^%s+", ""):gsub("%s+$", "")
+                if typed ~= "" and A.connected() then A.session.client:say(typed) end
+                line = ""
+            else
+                line = typed
+            end
+            if p:button("Close", "Back to the game (or F6, Esc).") then p:close() end
+        end)
+        cleria.input.action("chat", {label = "Archipelago chat", key = "F6"}, function()
+            if cleria.ui.is_open("chat") then cleria.ui.close()
+            elseif A.in_game or A.session.status ~= "idle" then cleria.ui.open("chat") end
+        end)
+    end
 
     -- the page: F1 > Mods > Archipelago
     cleria.ui.page("Archipelago", function(p)
@@ -287,6 +365,10 @@ function M.install(A, persist)
         else
             p:info("Autosave", "needs a newer CleriaCore", {color = "muted", desc = "The autosave uses cleria.game.save, which came with mod API 4."})
         end
+        cfg.seed_saves, changed = p:toggle("Seed save folder", cfg.seed_saves, {desc = "Keep this seed's saves in a " ..
+            "folder of their own (profiles/AP_<seed>_<slot>), away from your other saves. Applied on the title, at the " ..
+            "next connect. Off: the normal saves.", enabled = cleria.save.set_profile ~= nil})
+        if changed then persist("seed_saves") end
         cfg.boss_on_kill, changed = p:toggle("Boss checks on defeat", cfg.boss_on_kill, "A boss room's check is sent when the fight " ..
             "is won, not when you walk in (the floor bosses, the duels and the 20F ward; the 17F room has no fight and stays on entry). " ..
             "Not a retail option.")
@@ -305,6 +387,10 @@ function M.install(A, persist)
         if changed then persist("show_tracker") end
         cfg.tracker_mode, changed = p:choice("Tracker detail", cfg.tracker_mode, {"Areas", "Floors"}, "Count per area of the tower, or per floor.")
         if changed then persist("tracker_mode") end
+        cfg.show_warpmap, changed = p:toggle("Warp map counts", cfg.show_warpmap, {desc = "On the statues' warp map, the " ..
+            "checks found / total of each floor on its bar. Needs a CleriaCore or CleriaOre that reports the warp map.",
+            enabled = G.state ~= nil})
+        if changed then persist("show_warpmap") end
         cfg.show_room, changed = p:toggle("Left in this room", cfg.show_room, "The current room's locations still to find, bottom left. " ..
                                          "A hinted one shows its item.")
         if changed then persist("show_room") end
