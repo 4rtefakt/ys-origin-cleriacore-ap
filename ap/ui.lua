@@ -45,7 +45,7 @@ function M.install(A, persist)
 
     -- the item feed, top right: the last 6 lines of 10 s [H], fading
     cleria.hud.layer("feed", function(d)
-        if not cfg.show_feed or #A.feed == 0 then return end
+        if A.hud_hidden or not cfg.show_feed or #A.feed == 0 then return end
         local now, S = cleria.time(), d.scale
         local px, bw, pad = 16 * S, 430 * S, 10 * S
         local shown = 0
@@ -84,7 +84,7 @@ function M.install(A, persist)
     -- the connection line, top left
     cleria.hud.layer("status", function(d)
         local s = A.session.status
-        if not cfg.show_status or (s == "idle" and A.logic.st.seed == "") then return end
+        if A.hud_hidden or not cfg.show_status or (s == "idle" and A.logic.st.seed == "") then return end
         local S = d.scale
         local px = 14.5 * S
         local t = "AP  " .. (A.mismatch == "" and A.session:status_text(cleria.time()) or A.mismatch)
@@ -103,7 +103,7 @@ function M.install(A, persist)
 
     -- the tracker, left: checked / total per zone of the active locations, in tower order
     cleria.hud.layer("tracker", function(d)
-        if not cfg.show_tracker or not A.logic.configured then return end
+        if A.hud_hidden or not cfg.show_tracker or not A.logic.configured then return end
         local zones, lowest, order = {}, {}, {}
         local floors = cfg.tracker_mode == 2
         for _, r in ipairs(A.logic.regs) do
@@ -137,7 +137,7 @@ function M.install(A, persist)
 
     -- "left in this room", bottom left: the room's locations still to find; with spoilers, what each holds
     cleria.hud.layer("room", function(d)
-        if not cfg.show_room or not A.active() then return end
+        if A.hud_hidden or not cfg.show_room or not A.active() then return end
         local left = A.logic:left_in_room(A.logic.scene)
         if #left == 0 then return end
         local cl = A.session.client
@@ -186,7 +186,7 @@ function M.install(A, persist)
     local function map_open() return G.state ~= nil and G.state() == "map" end
     A.map_open = map_open
     cleria.hud.layer("warpmap", function(d)
-        if not cfg.show_warpmap or not A.active() or not map_open() then return end
+        if A.hud_hidden or not cfg.show_warpmap or not A.active() or not map_open() then return end
         local s = math.min(d.w / 1024, d.h / 768)
         local ox, oy = (d.w - 1024 * s) / 2, (d.h - 768 * s) / 2
         local px = 30 * d.scale
@@ -252,6 +252,15 @@ function M.install(A, persist)
         cleria.input.action("chat", {label = "Archipelago chat", key = "F6"}, function()
             if cleria.ui.is_open("chat") then cleria.ui.close()
             elseif A.in_game or A.session.status ~= "idle" then cleria.ui.open("chat") end
+        end)
+    end
+
+    if cleria.input and cleria.input.action then
+        cleria.input.action("skip", {label = "Skip cutscenes (hold)", key = "Right Ctrl"})
+        -- Insert hides the feed, the status line, the tracker and the counts for a clean screen, as the
+        -- retail client's overlay toggle did (the Blinding Fog trap stays)
+        cleria.input.action("overlay", {label = "Hide / show the Archipelago overlay", key = "Insert"}, function()
+            A.hud_hidden = not A.hud_hidden
         end)
     end
 
@@ -373,11 +382,29 @@ function M.install(A, persist)
             "is won, not when you walk in (the floor bosses, the duels and the 20F ward; the 17F room has no fight and stays on entry). " ..
             "Not a retail option.")
         if changed then persist("boss_on_kill") end
+        local can_skip = G.skip_cutscenes ~= nil
+        cfg.cutscene_skip, changed = p:choice("Cutscene skip", cfg.cutscene_skip, {"Off", "Hold Right Ctrl", "Always"},
+            {desc = "Hold: cutscenes go by while the key is held (rebind it under Controls). Always: every cutscene " ..
+            "goes by on its own; what you start yourself (a talk, a statue, a shop) still plays. CleriaCore skips each " ..
+            "one whole; CleriaOre fast-forwards it. Needs mod API 7.", enabled = can_skip})
+        if changed then persist("cutscene_skip") end
+        cfg.skip_intro, changed = p:toggle("Skip the intro on a random start", cfg.skip_intro, {desc = "On a seed with a " ..
+            "random start, a New Game skips its intro until you stand at the start statue. Needs mod API 7.", enabled = can_skip})
+        if changed then persist("skip_intro") end
         cfg.hint_alerts, changed = p:toggle("Hint alerts", cfg.hint_alerts, "A feed line when you enter a room that holds a hinted item.")
         if changed then persist("hint_alerts") end
         cfg.exp_mult, changed = p:slider("EXP multiplier", cfg.exp_mult, 0, 100, 1, "%.0f", "Your own EXP multiplier for every kill. " ..
             "0 = the seed's setting. Not a retail option.")
         if changed then cfg.exp_mult = math.tointeger(math.floor(cfg.exp_mult + 0.5)) or 0 persist("exp_mult") end
+        local scaled = A.logic.opt.level_scaling == 2 or A.logic.opt.level_scaling == 3
+        cfg.exp_base, changed = p:slider("...base", cfg.exp_base, 0, 100, 1, "%.0f", {desc = "Replaces the seed's base EXP " ..
+            "multiplier (above the catch-up range). 0 = the seed's. Only on a seed whose level scaling multiplies EXP, and " ..
+            "only while the EXP multiplier above is 0.", enabled = cfg.exp_mult == 0 and scaled})
+        if changed then cfg.exp_base = math.tointeger(math.floor(cfg.exp_base + 0.5)) or 0 persist("exp_base") end
+        cfg.exp_catchup, changed = p:slider("...catch-up", cfg.exp_catchup, 0, 100, 1, "%.0f", {desc = "Replaces the seed's " ..
+            "catch-up multiplier (while your level is at or under the deepest floor's expected level plus the margin). 0 = the " ..
+            "seed's.", enabled = cfg.exp_mult == 0 and scaled})
+        if changed then cfg.exp_catchup = math.tointeger(math.floor(cfg.exp_catchup + 0.5)) or 0 persist("exp_catchup") end
         p:section("Overlays")
         cfg.show_status, changed = p:toggle("Connection line", cfg.show_status, "The connection status, top left.")
         if changed then persist("show_status") end

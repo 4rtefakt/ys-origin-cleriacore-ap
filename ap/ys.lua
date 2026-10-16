@@ -74,7 +74,7 @@ function M.load_table(path)
     local doc, perr = cleria.json.decode(text)
     if not doc then return nil, path .. ": " .. perr end
     if doc.format ~= 1 or doc.game ~= "Ys Origin" then return nil, "not a Ys Origin table (format 1)" end
-    local t = {locations = {}, items = {}, loc = {}, item = {}, scene_names = {}, scene_floors = {}, chest_loc = {}}
+    local t = {locations = {}, items = {}, loc = {}, item = {}, scene_names = {}, scene_floors = {}, chest_loc = {}, roo_loc = {}}
     for k, v in pairs(obj(doc.scene_names)) do t.scene_names[tonumber(k)] = v end
     for k, v in pairs(obj(doc.scene_floors)) do t.scene_floors[tonumber(k)] = to_int(v, 0) end
     for _, j in ipairs(doc.locations) do
@@ -87,6 +87,16 @@ function M.load_table(path)
         if type(j.chest) == "table" then
             l.box_flag, l.script = to_int(j.chest.box_flag, -1), j.chest.script
             t.chest_loc[string.upper(l.key)] = l.id
+        end
+        -- a Roo trade (S_nnnn/AGERU/<flag>): its room, and the items its vanilla "Acquired" box can show
+        local roo_room = string.upper(l.key or ""):match("^(S_%d+)/AGERU/")
+        if roo_room then
+            local items = {}
+            for _, v in ipairs(type(j.vanilla) == "table" and j.vanilla or {}) do
+                local n = to_int(obj(v).item, -1)
+                if n >= 0 and n < 0x80 then items[n] = true end   -- a game item (the Topaz, 0x301, is not one)
+            end
+            t.roo_loc[roo_room] = {id = l.id, items = items}
         end
         t.locations[#t.locations + 1] = l
         t.loc[l.id] = l
@@ -826,12 +836,14 @@ function Logic:goal_reached(sc)
     return true
 end
 
--- EXP scaling: level_scaling 2/3 multiply, 1/3 raise the level [MOD 2537-2560]
-function Logic:exp_factor(level)
+-- EXP scaling: level_scaling 2/3 multiply, 1/3 raise the level [MOD 2537-2560]. `base` / `catchup` (> 0) replace the
+-- seed's two multipliers, as the retail client's exp_mult_base / exp_mult_catchup do.
+function Logic:exp_factor(level, base, catchup)
     local o = self.opt
     if o.level_scaling ~= 2 and o.level_scaling ~= 3 then return 1 end
     local catching_up = self.expected_hi > 0 and level <= self.expected_hi + o.exp_catchup_margin
-    return catching_up and o.exp_catchup_mult or o.exp_base_mult
+    if catching_up then return (catchup and catchup > 0) and catchup or o.exp_catchup_mult end
+    return (base and base > 0) and base or o.exp_base_mult
 end
 function Logic:level_floor(level)
     local o = self.opt

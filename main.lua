@@ -30,16 +30,19 @@ local cfg = {
     show_room = S.get("ShowRoom", false), room_spoil = S.get("RoomSpoilers", false), tracker_mode = S.get("TrackerMode", 1),
     boss_on_kill = S.get("BossOnKill", false),
     hint_alerts = S.get("HintAlerts", true), exp_mult = S.get("ExpMultiplier", 0),
+    exp_base = S.get("ExpBase", 0), exp_catchup = S.get("ExpCatchup", 0),
     autosave = S.get("Autosave", true), autosave_slot = S.get("AutosaveSlot", 8),
     seed_saves = S.get("SeedSaves", true), show_warpmap = S.get("ShowWarpMap", true),
+    -- cutscenes: 1 off, 2 while the "skip" key is held (Right Ctrl), 3 always [MOD cutscene_skip, default hold]
+    cutscene_skip = S.get("CutsceneSkip", 2), skip_intro = S.get("SkipIntro", true),
 }
 local cfg_keys = {server = "Server", slot = "Slot", password = "Password", uuid = "Uuid", death_link = "DeathLink",
                   auto_connect = "AutoConnect", show_status = "ShowStatus", show_feed = "ShowFeed",
                   show_tracker = "ShowTracker", export_state = "ExportState", show_room = "ShowRoom",
                   room_spoil = "RoomSpoilers", tracker_mode = "TrackerMode", boss_on_kill = "BossOnKill",
-                  hint_alerts = "HintAlerts", exp_mult = "ExpMultiplier",
+                  hint_alerts = "HintAlerts", exp_mult = "ExpMultiplier", exp_base = "ExpBase", exp_catchup = "ExpCatchup",
                   autosave = "Autosave", autosave_slot = "AutosaveSlot", seed_saves = "SeedSaves",
-                  show_warpmap = "ShowWarpMap"}
+                  show_warpmap = "ShowWarpMap", cutscene_skip = "CutsceneSkip", skip_intro = "SkipIntro"}
 local function persist(k) S.set(cfg_keys[k], cfg[k]) end
 
 -- ---- the runtime state ---------------------------------------------------------------------------------------
@@ -375,6 +378,8 @@ local function icon_of(it)
     return kApIcon
 end
 
+local kRodaFruit = 0x57   -- the item a Roo is fed
+
 -- the location whose box this is: a chest by its key, else the location the same script just found
 local function box_location(q)
     if q.script ~= "" then
@@ -382,7 +387,34 @@ local function box_location(q)
         if id and A.logic:reg(id) then return id end
         if q.script == A.fired_script and A.ticks - A.fired_tick < 600 then return A.fired_loc end   -- [H] 10 s
     end
+    -- A Roo's reward box does not follow its check in the same script (reported on CleriaCore and CleriaOre: the
+    -- vanilla "Acquired" box after a Roda Fruit). In a Roo's room, the box of one of its vanilla rewards is its
+    -- location's, whichever script shows it and whether its check came first or not; where the table names no
+    -- game item for it (S_2011, S_6009: the Roo is the room's only location), any box but the fruit handed over.
+    local roo = tbl.roo_loc[string.upper(q.room)]
+    if roo and q.kind == "window" and q.index ~= kRodaFruit and A.logic:reg(roo.id)
+        and (roo.items[q.index] or next(roo.items) == nil) then
+        return roo.id
+    end
     return nil
+end
+
+-- An elemental altar whose skill (g_flags 0x74..0x76) is another world's item: once its check has been sent and the
+-- skill's store suppressed, the rest of its event (the bubbles, the tutorial, the skill equipped) is for a skill the
+-- player does not hold, and on the retail exe equipping it left a null object (a freeze on LB). The event is ended
+-- right there (cleria.script.stop, API 7) and the HUD it hid comes back [MOD hook_vm.cpp Hook_Equip12C].
+local function altar_note(script, what)
+    if script == "" or not (cleria.script and cleria.script.stop) then return end
+    local p = A.altar
+    if not p or p.script ~= script or p.tick ~= A.ticks then
+        p = {script = script, tick = A.ticks}
+        A.altar = p
+    end
+    p[what] = true
+    if p.skill and p.check and cleria.script.stop() then
+        A.altar, A.altar_hud = nil, true
+        log("altar: " .. script .. " ended after its check (its skill is another world's)")
+    end
 end
 
 cleria.content.add_filter(function(q)
@@ -401,6 +433,7 @@ cleria.content.add_filter(function(q)
         end
         if (not chest or ap_chest) and A.logic:suppress_store(q.index, q.old, q.value) then
             log(string.format("suppressed g_flags[0x%X] %d -> %d (%s)", q.index, q.old, q.value, key))
+            if q.index >= 0x74 and q.index <= 0x76 then altar_note(q.script, "skill") end
             -- an inventory item (not the skill powers or the drained ring that ride along) swallowed outside
             -- a chest: if no check comes with it, the scene's "you got it" is a lie (withheld_notice)
             if not chest and q.index >= 0x48 and q.index <= 0x73 and q.index ~= 0x5E then
@@ -417,6 +450,7 @@ cleria.content.add_filter(function(q)
         if #f > 0 then
             A.fired_script, A.fired_loc, A.fired_tick = q.script, f[#f], A.ticks
             report(f, "store")
+            altar_note(q.script, "check")
         end
         return nil
     end
@@ -553,7 +587,7 @@ end)
 local function exp_mult(level)
     if not active() then return 1 end
     if cfg.exp_mult > 0 then return cfg.exp_mult end
-    return A.logic:exp_factor(level)
+    return A.logic:exp_factor(level, cfg.exp_base, cfg.exp_catchup)
 end
 cleria.game.exp_factor(exp_mult)
 -- a kill gives at least half the multiplier (mod API 6): the game's cut for a monster far below the player's
@@ -645,8 +679,25 @@ local function count_logic()
     A.in_logic, A.logic_left = n, left
 end
 
+-- The cutscene skip (cleria.game.skip_cutscenes, API 7): held by the "skip" key or always, as the player chose, and
+-- from a random-start New Game until its warp to the start statue, so the intro does not play first [MOD force_spawn,
+-- cutscene_ff_poll]. CleriaCore skips each cutscene and movie whole; CleriaOre collapses their waits and leaves
+-- the intro movies out.
+local function want_skip()
+    if cfg.cutscene_skip == 3 then return true end
+    if cfg.cutscene_skip == 2 and cleria.input and cleria.input.down and cleria.input.down("skip") then return true end
+    return cfg.skip_intro and A.in_game and A.logic.st.started and A.logic:spawn_warp() ~= nil
+end
+local function skip_tick()
+    if not G.skip_cutscenes then return end
+    local on = want_skip() == true
+    -- CleriaCore answers false outside a game (on the title): asked again each tick until it takes
+    if on ~= (A.skip_on == true) and G.skip_cutscenes(on) then A.skip_on = on end
+end
+
 cleria.events.on("tick", function()
     A.ticks = A.ticks + 1
+    skip_tick()
     if A.ticks % 30 == 0 then count_logic() end
     if A.fog_t > 0 then A.fog_t = A.fog_t - 1 end
     if not A.in_game or not cleria.save.ready() then A.last_level = nil write_state() return end
@@ -671,6 +722,10 @@ cleria.events.on("tick", function()
                 A.saved_at = cleria.time()   -- the "Saving..." mark (ap/ui.lua)
                 log(string.format("autosave: wrote No.%02d", slot))
             end
+        end
+        if A.altar_hud and not frozen then   -- the HUD the ended altar event had hidden (flag 185)
+            A.altar_hud = false
+            if G.flag(185) == 0 then G.set_flag(185, 1) end
         end
         local fixed = A.logic:repair(A.logic.scene, A.ticks)
         if fixed then log("repair: " .. fixed) end

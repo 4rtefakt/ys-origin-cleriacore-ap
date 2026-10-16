@@ -17,7 +17,7 @@ local ys = dofile("ap/ys.lua")
 -- a few locations as data/ys_origin.json has them: blessings by bit of flag 217, one armor upgrade cell
 local tbl = {loc = {}, locations = {}, scene_floors = {}, scene_names = {}}
 local function loc(id, name, d)
-    local l = {id = id, name = name, scene = 0, detect = d.method, flag = d.flag or -1, index = d.index or -1,
+    local l = {id = id, name = name, scene = 0, floor = "", detect = d.method, flag = d.flag or -1, index = d.index or -1,
                bit = d.bit or -1, detect_scene = 0, detect_floor = 0}
     tbl.loc[id] = l
     tbl.locations[#tbl.locations + 1] = l

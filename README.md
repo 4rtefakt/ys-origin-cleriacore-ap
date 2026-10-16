@@ -103,8 +103,12 @@ beside `cleria.ini`.
 | **Autosave** | on | Saves the game by itself after a check, a received item, a door opened with a key or medallion and a Panacea used, at the next safe moment (not in a cutscene, a boss fight or an arena). Needs a CleriaCore with mod API 4; older builds show it greyed. |
 | **Autosave slot** | No.08 | The slot the autosave writes, as numbered in the book. It is overwritten without asking. |
 | **Boss checks on defeat** | off | A boss room's check is sent when the fight is won, not when you walk in (the floor bosses, the duels and the 20F ward; the 17F room has no fight and stays on entry). |
+| **Cutscene skip** | Hold Right Ctrl | Off, held (the "Skip cutscenes" key, rebindable under Controls) or Always. CleriaCore skips a cutscene whole; CleriaOre fast-forwards its waits. Needs mod API 7. |
+| **Hide the overlay** | Insert | Hides the feed, the status line, the tracker and the room and map counts until pressed again (rebindable under Controls). The Blinding Fog trap stays. Needs mod API 7. |
+| **Skip the intro on a random start** | on | A random-start New Game skips its intro (cutscenes and movies) until you stand at the start statue. Needs mod API 7. |
 | **Hint alerts** | on | A feed line when you enter a room that holds a hinted item. |
 | **EXP multiplier** | 0 | Your own multiplier for every kill; 0 keeps the seed's. |
+| ...base / ...catch-up | 0 | With the EXP multiplier at 0, on a seed whose level scaling multiplies EXP: your own base and catch-up multipliers in place of the seed's (the retail client's `exp_mult_base` / `exp_mult_catchup`); 0 keeps the seed's. |
 | **Seed save folder** | on | This seed's saves in a folder of their own. Off: the normal saves. |
 | **Warp map counts** | on | Each floor's checks found / total on the warp map. |
 
