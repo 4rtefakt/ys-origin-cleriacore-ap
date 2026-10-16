@@ -388,6 +388,24 @@ local function box_location(q)
     return nil
 end
 
+-- An elemental altar whose skill (g_flags 0x74..0x76) is another world's item: once its check has been sent and the
+-- skill's store suppressed, the rest of its event (the bubbles, the tutorial, the skill equipped) is for a skill the
+-- player does not hold, and on the retail exe equipping it left a null object (a freeze on LB). The event is ended
+-- right there (cleria.script.stop, API 7) and the HUD it hid comes back [MOD hook_vm.cpp Hook_Equip12C].
+local function altar_note(script, what)
+    if script == "" or not (cleria.script and cleria.script.stop) then return end
+    local p = A.altar
+    if not p or p.script ~= script or p.tick ~= A.ticks then
+        p = {script = script, tick = A.ticks}
+        A.altar = p
+    end
+    p[what] = true
+    if p.skill and p.check and cleria.script.stop() then
+        A.altar, A.altar_hud = nil, true
+        log("altar: " .. script .. " ended after its check (its skill is another world's)")
+    end
+end
+
 cleria.content.add_filter(function(q)
     if not active() then return nil end
     local key = q.room .. "/" .. string.upper(q.script)
@@ -404,6 +422,7 @@ cleria.content.add_filter(function(q)
         end
         if (not chest or ap_chest) and A.logic:suppress_store(q.index, q.old, q.value) then
             log(string.format("suppressed g_flags[0x%X] %d -> %d (%s)", q.index, q.old, q.value, key))
+            if q.index >= 0x74 and q.index <= 0x76 then altar_note(q.script, "skill") end
             -- an inventory item (not the skill powers or the drained ring that ride along) swallowed outside
             -- a chest: if no check comes with it, the scene's "you got it" is a lie (withheld_notice)
             if not chest and q.index >= 0x48 and q.index <= 0x73 and q.index ~= 0x5E then
@@ -420,6 +439,7 @@ cleria.content.add_filter(function(q)
         if #f > 0 then
             A.fired_script, A.fired_loc, A.fired_tick = q.script, f[#f], A.ticks
             report(f, "store")
+            altar_note(q.script, "check")
         end
         return nil
     end
@@ -693,6 +713,10 @@ cleria.events.on("tick", function()
                 A.saved_at = cleria.time()   -- the "Saving..." mark (ap/ui.lua)
                 log(string.format("autosave: wrote No.%02d", slot))
             end
+        end
+        if A.altar_hud and not frozen then   -- the HUD the ended altar event had hidden (flag 185)
+            A.altar_hud = false
+            if G.flag(185) == 0 then G.set_flag(185, 1) end
         end
         local fixed = A.logic:repair(A.logic.scene, A.ticks)
         if fixed then log("repair: " .. fixed) end
