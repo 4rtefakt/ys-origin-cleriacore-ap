@@ -65,7 +65,7 @@ beside `cleria.ini`.
   starves an early one that logic promised.
 - **Random start**: a New Game of a `random_start` seed is warped once to the seed's start statue, which
   is lit so it saves and warps.
-- **Story repairs** (Yunica): the post-Kishgal "I'm just a burden" state on 1F and a stuck Dreaming Idol
+- **Story repairs**: Hugo's Eyes of Fact left hidden after a cut-short scene are put back; for Yunica, the post-Kishgal "I'm just a burden" state on 1F and a stuck Dreaming Idol
   chain are detected and put right, as in the retail mod.
 - **Withheld items**: when a story scene "gives" an item the seed moved elsewhere (the Zelkarons charging
   the Evil Ring), the game's own copy is withheld (a line in the mod's log, nothing on screen).
@@ -78,7 +78,18 @@ beside `cleria.ini`.
 - **DeathLink** (option, or on when the seed has it): your deaths are sent, theirs kill you (not during
   a story duel).
 - **Goal**: Darm (or every boss, by the seed's goal) sends the goal to the server.
-- **Overlays**: a connection line, an item / chat feed, a per-area tracker (each can be turned off).
+- **Overlays**: a connection line, an item / chat feed, a per-area tracker (each can be turned off). A release
+  or a collect (more than 6 items in one go) is one feed line; the chat window has every line.
+- **Chat** (mod API 7): **F6** opens a window over the game with the room's last lines and a line to type
+  into: chat, or a server command (`!hint <item>`, `!help` ...). The game runs on underneath; the key can be
+  changed in the page's Keys section.
+- **Warp map counts**: on the statues' warp map, each floor's checks found / total on its bar (lime while
+  some are left, gold when all are found); the floors with no statue are listed bottom left. Needs a
+  CleriaCore or CleriaOre whose `game.state()` reports the warp map (`"map"`).
+- **Seed save folder**: a seed's saves are kept apart, in `profiles/AP_<seed>_<slot>` (set on the title at
+  connect). Saves of the retail `dinput8.dll` client live in its own `archipelago_<seed>` folder and are not
+  found here: finish a run with the client it started on.
+- **Apworld check**: a seed made with a newer apworld than this mod knows is reported in the feed.
 - **Seed guard**: a save of one seed refuses a room of another seed; offline, a stamped save keeps its
   seed's rules from the cached slot_data.
 
@@ -94,6 +105,8 @@ beside `cleria.ini`.
 | **Boss checks on defeat** | off | A boss room's check is sent when the fight is won, not when you walk in (the floor bosses, the duels and the 20F ward; the 17F room has no fight and stays on entry). |
 | **Hint alerts** | on | A feed line when you enter a room that holds a hinted item. |
 | **EXP multiplier** | 0 | Your own multiplier for every kill; 0 keeps the seed's. |
+| **Seed save folder** | on | This seed's saves in a folder of their own. Off: the normal saves. |
+| **Warp map counts** | on | Each floor's checks found / total on the warp map. |
 
 The page also has: your **hints** (the server's list, kept up to date) with a field to ask for one and your
 hint points; a **chat / command** line with Send, and **Release** / **Collect** buttons once the goal is

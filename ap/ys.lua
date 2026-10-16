@@ -187,6 +187,13 @@ local function parse_slot_options(sd)
     if (next(o.blessing_costs) or next(o.blessing_vanilla)) and not shop_api then
         o.unsupported[#o.unsupported + 1] = "Shuffled blessing prices (this CleriaCore has no shop hooks)"
     end
+    -- floor -> the active location ids on it (the warp map's counts) [MOD ap_floor_count]
+    o.floor_locations = {}
+    for k, v in pairs(obj(sd.floor_locations)) do
+        local f = to_int(k, 0)
+        if f > 0 then o.floor_locations[f] = ints(v) end
+    end
+    o.apworld_version = type(sd.apworld_version) == "string" and sd.apworld_version or ""
     o.shop_unlock = to_int(sd.blessing_shop_unlock, 0)   -- 1: one more shop slot per distinct floor visited
     if o.shop_unlock ~= 0 and not shop_api then
         o.unsupported[#o.unsupported + 1] = "Blessing shop pacing (one per floor)"
@@ -306,6 +313,17 @@ function Logic:configure(sd, table_)
         end
     end
     if not next(self.opt.scene_floors) then self.opt.scene_floors = table_.scene_floors end
+    if not next(self.opt.floor_locations) then   -- an older seed: the floor of each active location's room
+        for _, r in ipairs(self.regs) do
+            local l = table_.loc[r.id]
+            local f = l and (tonumber(l.floor:match("^(%d+)F")) or self.opt.scene_floors[l.scene])
+            if f and f > 0 then
+                local t = self.opt.floor_locations[f] or {}
+                t[#t + 1] = r.id
+                self.opt.floor_locations[f] = t
+            end
+        end
+    end
     if not next(self.opt.scene_names) then self.opt.scene_names = table_.scene_names end
     self.configured = true
 end
@@ -686,10 +704,40 @@ function Logic:toal_annex(scene)
     return out
 end
 
+-- the warp map's count for a floor: the floor's active locations found (by this save or, co-op, the server)
+-- and their number; nil when the floor has none [MOD ap_floor_count]
+function Logic:floor_count(f, server_checked)
+    local ids = self.opt.floor_locations[f]
+    if not ids or #ids == 0 then return nil end
+    local found = 0
+    for _, id in ipairs(ids) do
+        if self.st.checks[id] or (server_checked and server_checked[id]) then found = found + 1 end
+    end
+    return found, #ids
+end
+
+-- Hugo's Eyes of Fact are hidden by 211 == 1 while a scene runs; a scene torn down before its tail (a room
+-- change in a skipped cutscene) leaves them hidden: no shots, no flames, until a later script clears it. With
+-- the controls in the player's hands (185 == 1) and no fight running (156 == 0) nothing keeps them hidden:
+-- after 3 s of that the flag is put back [MOD repair_hugo_eyes].
+function Logic:hugo_eyes(ticks)
+    if not (G.flag(211) == 1 and G.flag(185) == 1 and G.flag(156) == 0 and (P.hp() or 0) > 0) then
+        self.eyes_since = nil
+        return nil
+    end
+    self.eyes_since = self.eyes_since or ticks
+    if ticks - self.eyes_since < 3 * 60 then return nil end
+    self.eyes_since = nil
+    G.set_flag(211, 0)
+    return "Hugo's Eyes of Fact were left hidden (211 = 1) with the controls free: cleared"
+end
+
 -- per tick: repairs of story states a randomized seed can strand [MOD repair_1f_burden_softlock,
--- repair_dreaming_idol_chain]. Those two are Yunica's and both follow from the shipped scripts.
+-- repair_dreaming_idol_chain, repair_hugo_eyes]. The first two are Yunica's, the third Hugo's; all follow
+-- from the shipped scripts.
 function Logic:repair(scene, ticks)
     if G.flag(150) == 3 then return self:toal_annex(scene) end
+    if G.flag(150) == 2 then return self:hugo_eyes(ticks) end
     if G.flag(150) ~= 1 then return nil end
     -- After the Kishgal duel she is sent to 1F ("I'm just a burden", 242 == 1 and 243 == 0): the stairs and
     -- the Crystal refuse until the Roy scene, which needs the four 1F talks (278 == 4). Each talk sits under
