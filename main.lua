@@ -35,6 +35,8 @@ local cfg = {
     seed_saves = S.get("SeedSaves", true), show_warpmap = S.get("ShowWarpMap", true),
     -- cutscenes: 1 off, 2 while the "skip" key is held (Right Ctrl), 3 always [MOD cutscene_skip, default hold]
     cutscene_skip = S.get("CutsceneSkip", 2), skip_intro = S.get("SkipIntro", true),
+    -- the title's New Game > Archipelago (ap/ui.lua): 1-based choices
+    new_character = S.get("NewCharacter", 1), new_difficulty = S.get("NewDifficulty", 3), new_extra = S.get("NewExtra", false),
 }
 local cfg_keys = {server = "Server", slot = "Slot", password = "Password", uuid = "Uuid", death_link = "DeathLink",
                   auto_connect = "AutoConnect", show_status = "ShowStatus", show_feed = "ShowFeed",
@@ -42,7 +44,8 @@ local cfg_keys = {server = "Server", slot = "Slot", password = "Password", uuid 
                   room_spoil = "RoomSpoilers", tracker_mode = "TrackerMode", boss_on_kill = "BossOnKill",
                   hint_alerts = "HintAlerts", exp_mult = "ExpMultiplier", exp_base = "ExpBase", exp_catchup = "ExpCatchup",
                   autosave = "Autosave", autosave_slot = "AutosaveSlot", seed_saves = "SeedSaves",
-                  show_warpmap = "ShowWarpMap", cutscene_skip = "CutsceneSkip", skip_intro = "SkipIntro"}
+                  show_warpmap = "ShowWarpMap", cutscene_skip = "CutsceneSkip", skip_intro = "SkipIntro",
+                  new_character = "NewCharacter", new_difficulty = "NewDifficulty", new_extra = "NewExtra"}
 local function persist(k) S.set(cfg_keys[k], cfg[k]) end
 
 -- ---- the runtime state ---------------------------------------------------------------------------------------
@@ -670,6 +673,42 @@ cleria.events.on("frame", function()
         if cleria.save.set_profile(A.want_profile) then
             log("saves: profile " .. (cleria.save.profile() == "" and "(the normal saves)" or cleria.save.profile()))
             A.want_profile = nil
+        end
+    end
+    -- the title's New Game > Archipelago > Start (ap/ui.lua): once the room has answered and the saves are the
+    -- seed's, a new game of the seed's character at the tower's base, its opening behind it. The flags are what
+    -- the game's own scenario jump sets for that point (S_0100/S1004.XSO): the opening seen (246), the 1F statue
+    -- lit (300), and what the opening hands over (Yunica, Hugo: the Boost 187, 229, the Crystal 84, the Lila
+    -- Shell 85; Toal: 229, the Dark Crystal 86). A random start's warp then follows as after any new game.
+    local go = A.new_game
+    if go and go.on then
+        local s = A.session.status
+        if s == "connected" and A.logic.configured and not A.want_profile then
+            go.on = false
+            if go.mode == "continue" then   -- the seed's most recent save, at once
+                cleria.mods.command("ore.menu", "")
+                if not cleria.mods.command("ore.continue") then
+                    go.note = "No save of this seed yet"
+                    go.reopen(7)
+                end
+                return
+            end
+            local ch = A.logic.opt.character >= 0 and math.min(A.logic.opt.character, 2) + 1 or cfg.new_character
+            local flags = ch == 3 and "246:1,300:1,229:1,86:1" or "246:1,300:1,187:1,229:1,84:1,85:1"
+            local args = string.format("character=%d difficulty=%d extra=%d room=S_1000 flags=%s", ch, cfg.new_difficulty - 1,
+                                       cfg.new_extra and 1 or 0, flags)
+            log("new game: " .. args)
+            cleria.mods.command("ore.menu", "")   -- the "Connecting..." menu goes
+            if not cleria.mods.command("ore.new_game", args) then
+                go.note = "The game could not be started from here"
+                go.reopen(7)
+            end
+        elseif s == "refused" or (now - go.at > 2 and (s == "idle" or s == "disconnected")) or now - go.at > 30 then
+            go.on, go.note = false, s == "refused" and "The room refused the connection" or "Could not connect to the room"
+            log("new game: " .. A.session:status_text(now))
+            A.disconnect()   -- (no retries behind the menu)
+            cleria.mods.command("ore.menu", "")
+            go.reopen(7)
         end
     end
 end)

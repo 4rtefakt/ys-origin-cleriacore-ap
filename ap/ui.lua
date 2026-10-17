@@ -440,6 +440,102 @@ function M.install(A, persist)
             for i = #A.log, math.max(1, #A.log - 5), -1 do p:info("", A.log[i], {color = "muted", desc = A.log[i]}) end
         end
     end)
+
+    -- ---- the title's New Game (the retail loader, CleriaOre: a mod's "title_new_game" command takes the row) ----
+    -- It asks first: an Archipelago seed, or the game as it is. For a seed: the room, the difficulty and the
+    -- version, then the connection; main.lua starts the game once the room has answered (A.new_game). The menus
+    -- are the game's own (the loader's "ore.menu": a pick comes back as the command "menu_<id>" with the row, Esc
+    -- picks the last row), a line is typed in one too ("ore.prompt": "ok <text>" or "cancel").
+    if cleria.mods and cleria.mods.command then
+        local diffs = {"Very Easy", "Easy", "Normal", "Hard", "Nightmare"}
+        local chars = {"Yunica", "Hugo", "Toal"}
+        local fields = {{"server", "Server"}, {"slot", "Slot name"}, {"password", "Password"}}
+        local go = {on = false, at = 0, note = "", dirty = false}
+        A.new_game = go
+        local function clean(s) return (tostring(s):gsub("|", "/")) end
+        local function menu(id, caption, rows, cursor)
+            return cleria.mods.command("ore.menu", id .. ":" .. (cursor or 1) .. "|" .. clean(caption) .. "|" .. table.concat(rows, "|"))
+        end
+        local function seed_character()   -- 0..2 when the room has told it, else -1
+            return (A.session.status == "connected" and A.logic.configured and not go.dirty) and A.logic.opt.character or -1
+        end
+        local function open_choice() menu("ap_new", "Archipelago", {"Continue the seed", "New game of a seed", "Classic game", "Back"}) end
+        local function open_setup(cursor)
+            local sc = seed_character()
+            menu("ap_setup", go.note ~= "" and go.note or "Archipelago", {
+                "Server: " .. clean(cfg.server ~= "" and cfg.server or "(none)"),
+                "Slot: " .. clean(cfg.slot ~= "" and cfg.slot or "(none)"),
+                "Password: " .. (cfg.password ~= "" and "(set)" or "(none)"),
+                "Character: " .. (sc >= 0 and chars[math.min(sc, 2) + 1] .. " (the seed's)" or chars[cfg.new_character]),
+                "Difficulty: " .. diffs[cfg.new_difficulty],
+                "Version: " .. (cfg.new_extra and "Extra (if bought)" or "Normal"),
+                "Start", "Back"}, cursor)
+        end
+        go.reopen = open_setup   -- main.lua: after a start that failed
+        function go.start(mode)   -- "new" or "continue": connect (the room as the rows now say), wait
+            go.on, go.at, go.mode = true, cleria.time(), mode
+            local s = A.session.status
+            if s ~= "connected" or go.dirty then
+                if s ~= "idle" then A.disconnect() end
+                A.connect()
+            end
+            go.dirty = false
+            menu("ap_wait", "Connecting to " .. cfg.server .. "...", {"Cancel"})
+        end
+        local editing = 1
+        cleria.command("title_new_game", function()
+            go.on, go.note = false, ""
+            open_choice()
+        end)
+        cleria.command("menu_ap_new", function(a)
+            if a == "1" then   -- the room as it is set, then the seed's most recent save (main.lua)
+                if cfg.slot == "" or cfg.server == "" then go.note = "The server and the slot name first" open_setup(1) return end
+                go.start("continue")
+            elseif a == "2" then open_setup(1)
+            elseif a == "3" then cleria.mods.command("ore.title", "new_game") end   -- (4, Back: the title's own list returns)
+        end)
+        cleria.command("menu_ap_setup", function(a)
+            local r = tonumber(a) or 8
+            go.note = ""
+            if r <= 3 then
+                editing = r
+                cleria.mods.command("ore.prompt", "ap_edit|" .. fields[r][2] .. "|" .. clean(cfg[fields[r][1]]) .. (r == 3 and "|secret" or ""))
+            elseif r == 4 then
+                if seed_character() < 0 then cfg.new_character = cfg.new_character % 3 + 1 persist("new_character") end
+                open_setup(4)
+            elseif r == 5 then
+                cfg.new_difficulty = cfg.new_difficulty % 5 + 1
+                persist("new_difficulty")
+                open_setup(5)
+            elseif r == 6 then
+                cfg.new_extra = not cfg.new_extra
+                persist("new_extra")
+                open_setup(6)
+            elseif r == 7 then
+                if cfg.slot == "" or cfg.server == "" then
+                    go.note = "The server and the slot name first"
+                    open_setup(cfg.server == "" and 1 or 2)
+                    return
+                end
+                go.start("new")
+            else
+                open_choice()
+            end
+        end)
+        cleria.command("menu_ap_edit", function(a)
+            local key = fields[editing][1]
+            if a:sub(1, 2) == "ok" then
+                local v = a:sub(4)
+                if v ~= cfg[key] then cfg[key] = v persist(key) go.dirty = true end
+            end
+            open_setup(editing)
+        end)
+        cleria.command("menu_ap_wait", function()
+            go.on = false
+            A.disconnect()
+            open_setup(7)
+        end)
+    end
 end
 
 return M
