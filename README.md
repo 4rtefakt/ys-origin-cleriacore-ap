@@ -11,7 +11,7 @@
 
 </div>
 
-> **Status: 0.2.0.** Played in the Steam game (CleriaOre) and in CleriaCore against a local Archipelago
+> **Status: 0.3.0.** Played in the Steam game (CleriaOre) and in CleriaCore against a local Archipelago
 > server, and covered by CleriaCore's drive cases; not yet through a long multiworld: please report anything
 > odd. Made for **Ys Origin apworld 2.0.1 or newer**.
 >
