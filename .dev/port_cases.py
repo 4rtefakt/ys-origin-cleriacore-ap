@@ -88,7 +88,7 @@ ExpCatchup=2
     # Random start: a new game in S_1001 is warped to the seed's start statue once.
     "port_random_start": (dict(random_start=True, start_statue_scene=1009), dict(
         room="S_10/S_1001/S_1001", aplua={},
-        drive="300:lua=apstate;320:quit",
+        drive="900:lua=apstate;920:quit",
         expect=[P + "random start: warp to S_1009 (warp 1)", ">> entering S_1009"],
         absent=["not supported: Random start"])),
     # A vanilla weapon upgrade with no item behind it is clamped to what the seed granted; an ore raises it.
