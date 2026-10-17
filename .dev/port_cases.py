@@ -218,6 +218,15 @@ ShowTracker=1
         room="S_10/S_1001/S_1001", aplua={},
         drive="300:lua=apstate;320:quit",
         expect=["checks 2 goal 0 active 1 deathlink 0 in logic 3 left 3"])),
+    # A server that went back (restarted from an older save): it forgets the Roda Fruit, so its list is as long
+    # as `applied` again once the next Panacea arrives. That Panacea is new to the save and is granted; the count
+    # alone had skipped it. (Needs CleriaCore's mock server with !rollback.)
+    "port_rollback": (dict(), dict(
+        room="S_10/S_1001/S_1001", aplua={},
+        drive="60:lua=apsay !give Celcetan Panacea;100:lua=apsay !give Roda Fruit;160:lua=apflag 0x59;"
+              "200:lua=apsay !rollback 1;900:lua=apsay !give Celcetan Panacea;1000:lua=apflag 0x59;1010:lua=apstate;1020:quit",
+        expect=[P + "flag 0x59 = 1", P + "connected as Yunica", "Celcetan Panacea: g_flags[0x59] 1 -> 2 (from Clicker)",
+                P + "flag 0x59 = 2", "applied 4/4"])),
     "port_invariants": (dict(), dict(
         room="S_10/S_1001/S_1001", aplua={},
         drive="60:flag=99,3;70:flag=184,5;120:lua=apflag 99;130:lua=apflag 184;150:quit",

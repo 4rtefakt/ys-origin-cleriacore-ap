@@ -195,6 +195,7 @@ local function on_session(e)
     A.in_game = true
     local st = ys.state_from_table(cleria.save.get("state"))
     A.logic.st = st
+    A.reconcile = true
     A.logic.expected_hi = 0
     A.death_pending = false
     A.fog_t, A.butter_t, A.chaos_pending, A.leech_pending = 0, 0, 0, 0
@@ -325,6 +326,7 @@ local function handle(e)
         for _, x in ipairs(e.errors) do why[#why + 1] = client.describe_refusal(x) end
         log("refused: " .. table.concat(why, ", "))
     elseif k == "ItemsReset" then
+        A.reconcile = true
         -- the login list arrived before this session: a trap in it already happened [H]
         if A.await_login_items then A.live_from = #A.session.client.received end
         A.await_login_items = false
@@ -520,11 +522,22 @@ local function grant_pending()
     if not c:items_in_sync() then return end
     local st = A.logic.st
     local any = false
-    while st.applied < #c.received do
-        local it = c.received[st.applied + 1]
-        local index = st.applied
+    local todo = {}
+    if A.reconcile or not st.got then   -- a whole list (a login, a resync) or a loaded save: matched item by item
+        A.reconcile = false
+        todo = ys.owed(st, c.received)
+        local n = 0
+        for _, i in ipairs(todo) do if i <= st.applied then n = n + 1 end end
+        if n > 0 then log("received list: " .. n .. " item(s) before #" .. st.applied .. " are new to this save (the server's state went back)") end
+        any = st.applied ~= #c.received
+    else
+        for i = st.applied + 1, #c.received do todo[#todo + 1] = i end
+    end
+    for _, i in ipairs(todo) do
+        local it = c.received[i]
+        local index = i - 1
         local g = A.logic:grant(it.item, it.flags)
-        st.applied = st.applied + 1
+        ys.got_add(st, it)
         any = true
         log("grant #" .. index .. " " .. g.text .. " (from " .. c:player_name(it.player) .. ")")
         if g.trap then
@@ -536,8 +549,10 @@ local function grant_pending()
             cleria.events.emit("item_obtained", {item = ti.flag, count = 1, source = "ap"})
         end
     end
-    if any then store_state() end
-    if any and st.applied > A.live_from then autosave_request() end   -- not for the login list of a loaded save
+    if not any then return end
+    st.applied = #c.received
+    store_state()
+    if #todo > 0 and st.applied > A.live_from then autosave_request() end   -- not for the login list of a loaded save
 end
 
 -- A story beat that hands over a pool item (the Zelkarons "charging" the Evil Ring) still plays its dialogue
