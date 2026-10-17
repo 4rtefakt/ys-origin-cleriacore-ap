@@ -213,10 +213,11 @@ end
 
 -- ---- the save block --------------------------------------------------------------------------------------
 -- roda: Roda Fruits received so far (-1 = a save from before 0.2, whose fruits were counted into the cell);
--- spawned: the random-start warp was done (or is not owed: a save that had already started)
+-- spawned: the random-start warp was done (or is not owed: a save that had already started);
+-- necklace: the Blue Necklace was taken off at the 3F barrier and is owed back (Logic:barrier_3f)
 function M.new_state() return {seed = "", slot_name = "", slot = 0, applied = 0, checks = {}, claimed = {}, goal_sent = false,
                                started = false, saw_gameplay = false, ore = 0, prog = {}, statues = {}, roda = 0, held = {},
-                               spawned = false, floors = {}, got = {}} end
+                               spawned = false, floors = {}, got = {}, necklace = false} end
 
 local function set_list(s)
     local t = {}
@@ -234,7 +235,8 @@ function M.state_to_table(st)
     return {seed = st.seed, slot = st.slot, slot_name = st.slot_name, applied = st.applied, checks = set_list(st.checks),
             claimed = set_list(st.claimed), goal = st.goal_sent, started = st.started, gameplay = st.saw_gameplay, ore = st.ore,
             prog = st.prog, statues = set_list(st.statues), roda = st.roda, spawned = st.spawned,
-            floors = set_list(st.floors), held = set_list(st.held), got = st.got}
+            floors = set_list(st.floors), held = set_list(st.held), got = st.got,
+            necklace = st.necklace}
 end
 function M.state_from_table(t)
     local st = M.new_state()
@@ -243,6 +245,7 @@ function M.state_from_table(t)
     st.applied = math.max(0, to_int(t.applied, 0))
     st.checks, st.claimed, st.statues = list_set(t.checks), list_set(t.claimed), list_set(t.statues)
     st.floors, st.held = list_set(t.floors), list_set(t.held)
+    st.necklace = t.necklace == true
     st.goal_sent, st.started, st.saw_gameplay = t.goal == true, t.started == true, t.gameplay == true
     st.ore = math.max(0, to_int(t.ore, 0))
     st.roda = t.roda == nil and -1 or math.max(-1, to_int(t.roda, -1))
@@ -728,19 +731,75 @@ function Logic:roda_derived() return #self.opt.roo_flags > 0 and self.st.roda >=
 -- (S_4104 -> S_4017 -> S_4021, which sets 232) never ends and S_3080 starts the fight again on every entry.
 -- A seed reaches those floors in any order, so both flags are held at 0 while he is in these rooms (the
 -- stoppers test them when he steps on the trigger) and put back when he leaves.
+-- Yunica and Hugo have the same bridge. S_4104's root starts s_Evt4104_stop_Yunica once Zava is beaten
+-- (225 == 1) and her last duel is not (236 == 0), and s_Evt4104_stop_Hugo once his 21F scene has run
+-- (272 == 1, S_EVT5014_HUGO) and Pictimos's has not (273 == 0, AfterBattle_Hugo_3): each walks the player back
+-- off the bridge. In the annex S_4017 also skips Yunica's events (her Dreaming Idol among them) after 225. Zava
+-- and 21F come after the annex in the vanilla order, so the same hold gives back the branches logic expects.
+-- The hold is made on room_enter too (main.lua), before the room's root runs, and in the rooms on either side.
+local kAnnex = {[4013] = true, [4014] = true, [4016] = true, [4017] = true, [4021] = true, [4104] = true}
 local kToalAnnex = {[3080] = true, [4013] = true, [4014] = true, [4016] = true, [4017] = true, [4021] = true, [4104] = true}
-function Logic:toal_annex(scene)
-    local here, out = kToalAnnex[scene] == true, nil
-    for _, f in ipairs({269, 289}) do
+local kAnnexHold = {[1] = {name = "Yunica", flags = {225}, rooms = kAnnex}, [2] = {name = "Hugo", flags = {272}, rooms = kAnnex},
+                    [3] = {name = "Toal", flags = {269, 289}, rooms = kToalAnnex}}
+function Logic:annex(scene)
+    local h = kAnnexHold[G.flag(150)]
+    if not h then return nil end
+    local here, out = h.rooms[scene] == true, nil
+    for _, f in ipairs(h.flags) do
         if here and G.flag(f) == 1 then
             G.set_flag(f, 0) self.st.held[f] = true
-            out = "Rado's Annex: Toal's story flag " .. f .. " held at 0 in here (the annex stays open to him)"
+            out = "Rado's Annex: " .. h.name .. "'s story flag " .. f .. " held at 0 in here (the annex stays open to " ..
+                  (h.name == "Yunica" and "her" or "him") .. ")"
         elseif not here and self.st.held[f] then
             G.set_flag(f, 1) self.st.held[f] = nil
-            out = "Rado's Annex: Toal's story flag " .. f .. " put back"
+            out = "Rado's Annex: " .. h.name .. "'s story flag " .. f .. " put back"
         end
     end
     return out
+end
+
+-- The 3F barrier (S_1013). S_EVT1013 sends Yunica or Hugo to 4F (s_Evt1013_2 -> S_1009) unless the Blue
+-- Necklace (0x37) is equipped (op 0x8C Flag_IsEquip); with it on they resist the pull, and once the circle's
+-- four guardians are beaten the same event breaks the barrier for good (444 = 1: S_1013's root spawns neither
+-- the kekkai nor the circle again). The 4F rooms behind S_1009 are reached only by that teleport, and in the
+-- vanilla order the necklace is found among them. A seed can give it first, so until S_1009 has been entered
+-- once (its root sets 310 on every entry) the necklace is taken off in S_1013 and put back on outside
+-- (player.equipment / equip, mod API 7). Toal resists by Boost instead (141 == 1 while it runs), learnt in
+-- S_1006 behind S_1005's Bronze Key door, which a seed can open first too: his boost flag is held at 0 in
+-- S_1013 until then, so the event teleports him as well. A save that already broke the barrier that way gets
+-- it back in the rooms on either side (444 = 0; only S_EVT1013 writes it, and only NPC talk reads it besides
+-- S_1013), as the C++ client does (ys-origin-archipelago#32).
+local kBlueNecklace = 0x37
+function Logic:barrier_3f(scene)
+    local st = self.st
+    if (scene == 1005 or scene == 1010) and G.flag(444) ~= 0 and G.flag(310) == 0 then
+        G.set_flag(444, 0)
+        return "3F barrier: broken before the first teleport to 4F (S_1009): put back (444 = 0)"
+    end
+    if scene == 1013 and G.flag(150) == 3 then
+        if G.flag(310) == 0 and G.flag(444) == 0 and G.flag(141) ~= 0 then
+            G.set_flag(141, 0)
+            return "3F barrier: Toal's boost (141) dropped until the first teleport to 4F (S_1009)"
+        end
+        return nil
+    end
+    if not (P.equipment and P.equip) then return nil end
+    if scene == 1013 then
+        if G.flag(310) ~= 0 or G.flag(444) ~= 0 then return nil end
+        local e = P.equipment()
+        if e and e.accessory == kBlueNecklace and P.equip("accessory", nil) then
+            st.necklace = true
+            return "3F barrier: the Blue Necklace taken off until the first teleport to 4F (S_1009)"
+        end
+    elseif st.necklace then
+        st.necklace = false
+        local e = P.equipment()
+        if G.flag(kBlueNecklace) >= 1 and e and e.accessory < 0 and P.equip("accessory", kBlueNecklace) then
+            return "3F barrier: the Blue Necklace put back on"
+        end
+        return "3F barrier: the Blue Necklace left off (another accessory is on)"
+    end
+    return nil
 end
 
 -- the warp map's count for a floor: the floor's active locations found (by this save or, co-op, the server)
@@ -772,10 +831,11 @@ function Logic:hugo_eyes(ticks)
 end
 
 -- per tick: repairs of story states a randomized seed can strand [MOD repair_1f_burden_softlock,
--- repair_dreaming_idol_chain, repair_hugo_eyes]. The first two are Yunica's, the third Hugo's; all follow
--- from the shipped scripts.
+-- repair_dreaming_idol_chain, repair_hugo_eyes], and the two the seed's order alone can cause: Rado's Annex
+-- and the 3F barrier (every character). All follow from the shipped scripts.
 function Logic:repair(scene, ticks)
-    if G.flag(150) == 3 then return self:toal_annex(scene) end
+    local fixed = self:annex(scene) or self:barrier_3f(scene)
+    if fixed or G.flag(150) == 3 then return fixed end
     if G.flag(150) == 2 then return self:hugo_eyes(ticks) end
     if G.flag(150) ~= 1 then return nil end
     -- After the Kishgal duel she is sent to 1F ("I'm just a burden", 242 == 1 and 243 == 0): the stairs and
