@@ -65,8 +65,8 @@ CASES = {
                 P + "suppressed g_flags[0xB7] 0 -> 1 (S_2011/AGERU)", P + "flag 0x153 = 1"],
         absent=["power increased"])),
     # An elemental altar (S_2009) whose skill the seed moved: the skill withheld and the check sent. Where the engine
-    # has cleria.script.stop (mod API 7) the event ends right there and the HUD it hid (flag 185) comes back; neither
-    # CleriaCore nor CleriaOre has it yet (2026-10-17), and on CleriaCore the event plays out with nothing broken.
+    # has cleria.script.stop (mod API 7: CleriaOre since 1.1.0; not on CleriaCore master as of 2026-10-17) the event
+    # ends right there and the HUD it hid (flag 185) comes back; without it the event plays out with nothing broken.
     # Either way the world runs again, no script left, the skill not held.
     "port_altar": (dict(), dict(
         room="S_20/S_2009/S_2009", aplua={},
