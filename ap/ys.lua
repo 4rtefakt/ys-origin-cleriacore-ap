@@ -216,7 +216,7 @@ end
 -- spawned: the random-start warp was done (or is not owed: a save that had already started)
 function M.new_state() return {seed = "", slot_name = "", slot = 0, applied = 0, checks = {}, claimed = {}, goal_sent = false,
                                started = false, saw_gameplay = false, ore = 0, prog = {}, statues = {}, roda = 0, held = {},
-                               spawned = false, floors = {}} end
+                               spawned = false, floors = {}, got = {}} end
 
 local function set_list(s)
     local t = {}
@@ -234,7 +234,7 @@ function M.state_to_table(st)
     return {seed = st.seed, slot = st.slot, slot_name = st.slot_name, applied = st.applied, checks = set_list(st.checks),
             claimed = set_list(st.claimed), goal = st.goal_sent, started = st.started, gameplay = st.saw_gameplay, ore = st.ore,
             prog = st.prog, statues = set_list(st.statues), roda = st.roda, spawned = st.spawned,
-            floors = set_list(st.floors), held = set_list(st.held)}
+            floors = set_list(st.floors), held = set_list(st.held), got = st.got}
 end
 function M.state_from_table(t)
     local st = M.new_state()
@@ -248,9 +248,38 @@ function M.state_from_table(t)
     st.roda = t.roda == nil and -1 or math.max(-1, to_int(t.roda, -1))
     st.spawned = t.spawned == true or (t.spawned == nil and st.started)
     for k, v in pairs(type(t.prog) == "table" and t.prog or {}) do st.prog[k] = to_int(v, 0) end
+    st.got = nil   -- absent in a save from before it: M.owed rebuilds it from `applied`
+    if type(t.got) == "table" then
+        st.got = {}
+        for k, v in pairs(t.got) do if type(k) == "string" and to_int(v, 0) > 0 then st.got[k] = to_int(v, 0) end end
+    end
     return st
 end
 function M.count(set) local n = 0 for _ in pairs(set) do n = n + 1 end return n end
+
+-- st.got: every received item this save has applied, as a count per "item:location:player". A server that lost
+-- some of its state (a crash before its save, a host restarted from an older .apsave) sends a received list that is
+-- no longer the one `applied` counted: the list is matched against st.got instead, so an item new to the save is
+-- granted even where the count says it was, and one the save already holds is never granted twice.
+local function item_key(it) return it.item .. ":" .. it.location .. ":" .. it.player end
+function M.got_add(st, it)
+    local k = item_key(it)
+    st.got[k] = (st.got[k] or 0) + 1
+end
+-- -> the positions (1-based) of `received` this save does not hold yet
+function M.owed(st, received)
+    if not st.got then   -- a save from before st.got: its first `applied` items were applied
+        st.got = {}
+        for i = 1, math.min(st.applied, #received) do M.got_add(st, received[i]) end
+    end
+    local left, out = {}, {}
+    for k, n in pairs(st.got) do left[k] = n end
+    for i, it in ipairs(received) do
+        local k = item_key(it)
+        if (left[k] or 0) > 0 then left[k] = left[k] - 1 else out[#out + 1] = i end
+    end
+    return out
+end
 
 -- The seed's logic as the apworld exports it (slot_data.logic, rules.export_logic): region 0 is the origin,
 -- entrances {from, to, rule}, locations id -> {region, rule}; a rule is true / false, {"has", item, n},
