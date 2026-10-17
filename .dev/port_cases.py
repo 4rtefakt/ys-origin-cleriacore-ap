@@ -76,7 +76,7 @@ CASES = {
         drive=L + "10:killall;150:run=TalkC940;" + ";".join("%d:ok" % t for t in range(300, 1560, 60)) +
               ";1600:scripts;1610:lua=apflag 0x75;1620:lua=apflag 185;1630:quit",
         expect=[P + "suppressed g_flags[0x75] -1 -> 1 (S_2009/TALKC940)",
-                P + "check 5857538 Flooded Prison: Skill Room ", "Levinstrike Warhammer (store)", "t1600 scripts",
+                P + "check 5857538 Flooded Prison: Skill Room ", "Levinstrike Warhammer (store)", " scripts",   # (its tick moves on with the login wait)
                 "frozen 0", P + "flag 0x75 = -1", P + "flag 0xB9 = 1"],
         absent=["script TalkC940 pc"])),
     # The EXP base / catch-up sliders: the fixture's seed multiplies a kill's EXP by 20 (level_scaling 2); with both
@@ -257,7 +257,7 @@ ShowTracker=1
                                       locations={"5857429": [1, True], "5857558": [1, True], "5857587": [2, True],
                                                  "5857332": [1, ["all", ["reach", 1], ["has", "SP: 50", 2]]]})), dict(
         room="S_10/S_1001/S_1001", aplua={},
-        drive=L + "300:lua=apstate;320:quit",
+        drive="1:waitlog=print ItemSend;2:waitlog=print ItemSend;60:lua=apstate;80:quit",   # (the two checks sent back)
         expect=["checks 2 goal 0 active 1 deathlink 0 in logic 3 left 3"])),
     # A server that went back (restarted from an older save): it forgets the Roda Fruit, so its list is as long
     # as `applied` again once the next Panacea arrives. That Panacea is new to the save and is granted; the count
