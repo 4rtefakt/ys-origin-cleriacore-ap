@@ -153,6 +153,42 @@ ShowTracker=1
                 ">> entering S_4021", ">> entering S_3006", P + "repair: Rado's Annex: Toal's story flag 289 put back",
                 P + "flag 0xE8 = 1", P + "flag 0x121 = 1"],
         absent=["script Kadena_Stopper"])),
+    # Yunica after Zava (225): S_4104's root would start s_Evt4104_stop_Yunica. 225 is held at 0 from S_4014 on, so
+    # the root takes the annex intro instead (260 == 0: EV_4104_Yunica)...
+    "port_yunica_annex": (dict(), dict(
+        room="S_40/S_4014/S_4014", char="1", aplua={},
+        drive="300:flag=225,1;360:lua=apflag 225;390:exit=2;640:scripts;660:lua=apflag 225;680:quit",
+        expect=[P + "repair: Rado's Annex: Yunica's story flag 225 held at 0", P + "flag 0xE1 = 0", ">> entering S_4104",
+                P + "flag 0xE1 = 0"],
+        absent=["s_Evt4104_stop_Yunica"])),
+    # ...and put back on the way out (S_4019).
+    "port_yunica_annex_out": (dict(), dict(
+        room="S_40/S_4014/S_4014", char="1", aplua={},
+        drive="300:flag=225,1;360:lua=apflag 225;390:exit=0;640:lua=apflag 225;660:quit",
+        expect=[P + "flag 0xE1 = 0", ">> entering S_4019", P + "repair: Rado's Annex: Yunica's story flag 225 put back",
+                P + "flag 0xE1 = 1"])),
+    # Hugo between his 21F scene (272) and Pictimos (273): s_Evt4104_stop_Hugo. The flag is set on the tick of the
+    # exit, so the hold made on room_enter (before the room's root runs) is the one that keeps the stopper off.
+    "port_hugo_annex": (dict(), dict(
+        room="S_40/S_4014/S_4014", char="2", aplua={},
+        drive="300:lua=apstate;390:flag=272,1;390:exit=2;640:scripts;660:lua=apflag 272;680:quit",
+        expect=["active 1", ">> entering S_4104", P + "repair: Rado's Annex: Hugo's story flag 272 held at 0", P + "flag 0x110 = 0"],
+        absent=["s_Evt4104_stop_Hugo"])),
+    # The 3F barrier before the first teleport: Yunica with the Blue Necklace on (a seed's early necklace) can stay in it,
+    # beat its four guardians and break it for good (444 = 1), leaving the 4F rooms behind S_1009 out of reach. The necklace
+    # comes off in S_1013, the event sends her to S_1009, and it goes back on there.
+    "port_barrier_necklace": (dict(), dict(
+        room="S_10/S_1013/S_1013", char="1", aplua={}, env=drive_regress._LOCK,
+        drive="300:flag=55,1;301:acc=55;360:move=0,1,200;440:every=20,1000,ok;1100:lua=apflag 444;1120:quit",
+        expect=[P + "repair: 3F barrier: the Blue Necklace taken off", ">> entering S_1009",
+                P + "repair: 3F barrier: the Blue Necklace put back on", P + "flag 0x1BC = 0"])),
+    # A save that already broke it that way (444 = 1, 310 = 0): the barrier is put back in S_1005, and S_1013 sends
+    # her to S_1009 again.
+    "port_barrier_repair": (dict(), dict(
+        room="S_10/S_1005/S_1005", char="1", aplua={}, env=drive_regress._LOCK,
+        drive="300:flag=444,1;360:lua=apflag 444;380:exit=2;440:move=0,1,200;520:every=20,1100,ok;1140:quit",
+        expect=[P + "repair: 3F barrier: broken before the first teleport to 4F (S_1009): put back (444 = 0)",
+                P + "flag 0x1BC = 0", ">> entering S_1013", ">> entering S_1009"])),
     # Mod API 4. Autosave: a chest check, then the save to the book's No.08 (file 7) at the next safe tick.
     "port_autosave": (dict(), dict(
         room="S_10/S_1001/S_1001", aplua={},

@@ -112,6 +112,12 @@ or start the seed again here.
   is lit so it saves and warps.
 - **Story repairs**: Hugo's Eyes of Fact left hidden after a cut-short scene are put back; for Yunica, the post-Kishgal "I'm just a burden" state on 1F and a stuck Dreaming Idol
   chain are detected and put right, as in the retail mod.
+- **Play-order fixes**: a seed lets you reach places in an order the story never planned, and two of
+  them could lock you out for good. Rado's Annex stays open to every character, whatever bosses you have
+  already beaten (the bridge used to turn Yunica back after Zava, and Hugo after his 21F scene). The 3F
+  barrier always teleports you to 4F the first time, even if the Blue Necklace (or Toal's Boost) came
+  early: the necklace comes off in that room and goes back on right after. A save that already broke the
+  barrier gets it back.
 - **Withheld items**: when a story scene "gives" an item the seed moved elsewhere (the Zelkarons charging
   the Evil Ring), the game's own copy is withheld (a line in the mod's log, nothing on screen).
 - **Invariants**: a key item never counts above 1 (the scripts test for exactly 1) and a skill level

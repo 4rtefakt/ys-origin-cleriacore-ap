@@ -580,6 +580,8 @@ cleria.events.on("room_enter", function(e)
     A.logic.boss_on_kill = cfg.boss_on_kill
     report(A.logic:on_scene(ys.scene_number(e.room)), "room")
     hint_alert(ys.scene_number(e.room))
+    local fixed = A.logic:repair(A.logic.scene, A.ticks)   -- before the room's root runs (the annex holds)
+    if fixed then log("repair: " .. fixed) end
 end)
 
 if (cleria.api_version or 3) >= 4 then
