@@ -64,16 +64,18 @@ CASES = {
                 P + "box S_2011/AGERU: Received\\nSP: 50.", P + "check 5857533 Flooded Prison: 8F Path 2 ", "Roo Trade (store)",
                 P + "suppressed g_flags[0xB7] 0 -> 1 (S_2011/AGERU)", P + "flag 0x153 = 1"],
         absent=["power increased"])),
-    # An elemental altar (S_2009) whose skill the seed moved: the skill withheld, the check sent, then the event
-    # ended there (mod API 7, cleria.script.stop) with the HUD it hid (flag 185) back and the world running.
+    # An elemental altar (S_2009) whose skill the seed moved: the skill withheld and the check sent. Where the engine
+    # has cleria.script.stop (mod API 7) the event ends right there and the HUD it hid (flag 185) comes back; neither
+    # CleriaCore nor CleriaOre has it yet (2026-10-17), and on CleriaCore the event plays out with nothing broken.
+    # Either way the world runs again, no script left, the skill not held.
     "port_altar": (dict(), dict(
         room="S_20/S_2009/S_2009", aplua={},
-        drive="10:killall;150:run=TalkC940;300:scripts;310:lua=apflag 0x75;320:lua=apflag 185;330:quit",
+        drive="10:killall;150:run=TalkC940;" + ";".join("%d:ok" % t for t in range(300, 1560, 60)) +
+              ";1600:scripts;1610:lua=apflag 0x75;1620:lua=apflag 185;1630:quit",
         expect=[P + "suppressed g_flags[0x75] -1 -> 1 (S_2009/TALKC940)",
-                P + "check 5857538 Flooded Prison: Skill Room ", "Levinstrike Warhammer (store)",
-                P + "altar: TalkC940 ended after its check (its skill is another world's)", "frozen 0",
-                P + "flag 0x75 = -1", P + "flag 0xB9 = 1"],
-        absent=["script TalkC940"])),
+                P + "check 5857538 Flooded Prison: Skill Room ", "Levinstrike Warhammer (store)", "t1600 scripts",
+                "frozen 0", P + "flag 0x75 = -1", P + "flag 0xB9 = 1"],
+        absent=["script TalkC940 pc"])),
     # The EXP base / catch-up sliders: the fixture's seed multiplies a kill's EXP by 20 (level_scaling 2); with both
     # set to 2 the same five kills give 102, not 1029. The kills wait for the login (the factor is 1 before it).
     "port_exp_override": (dict(), dict(
