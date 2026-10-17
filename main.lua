@@ -678,7 +678,7 @@ end)
 local function count_logic()
     local c, st = A.session.client, A.logic.st
     if not A.graph or not A.logic.configured then A.in_logic = nil return end
-    local key = #c.received .. ":" .. ys.count(st.checks)
+    local key = #c.received .. ":" .. ys.count(st.checks) .. ":" .. ys.count(c.checked)
     if key == A.logic_key then return end
     A.logic_key = key
     local have = {}
@@ -691,7 +691,7 @@ local function count_logic()
     for _, r in ipairs(A.logic.regs) do
         if set[r.id] then
             n = n + 1
-            if not st.checks[r.id] then left = left + 1 end
+            if not st.checks[r.id] and not c.checked[r.id] then left = left + 1 end   -- a collect / release counts
         end
     end
     A.in_logic, A.logic_left = n, left
