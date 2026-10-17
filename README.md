@@ -148,7 +148,7 @@ or start the seed again here.
   name, password: each typed in a menu of the game's), the character when the seed leaves it open, the
   difficulty and the Extra version, connects, and starts a new game of the seed's character at the tower's base
   with the game's opening behind it (the flags the game's own scenario jump sets for that point); a random
-  start's warp follows as after any new game. Not yet played against a real room.
+  start's warp follows as after any new game. Needs CleriaOre 1.2.2 or newer.
 
 ## Quality of life (all optional: F1 > Mods > Archipelago)
 

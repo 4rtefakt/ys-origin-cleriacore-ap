@@ -462,7 +462,7 @@ function M.install(A, persist)
         local function open_choice() menu("ap_new", "Archipelago", {"Continue the seed", "New game of a seed", "Classic game", "Back"}) end
         local function open_setup(cursor)
             local sc = seed_character()
-            menu("ap_setup", go.note ~= "" and go.note or "Archipelago", {
+            return menu("ap_setup", go.note ~= "" and go.note or "Archipelago", {
                 "Server: " .. clean(cfg.server ~= "" and cfg.server or "(none)"),
                 "Slot: " .. clean(cfg.slot ~= "" and cfg.slot or "(none)"),
                 "Password: " .. (cfg.password ~= "" and "(set)" or "(none)"),
@@ -471,7 +471,10 @@ function M.install(A, persist)
                 "Version: " .. (cfg.new_extra and "Extra (if bought)" or "Normal"),
                 "Start", "Back"}, cursor)
         end
-        go.reopen = open_setup   -- main.lua: after a start that failed
+        -- main.lua, after a start that failed: the menu it closed is still the game's for a few frames, and the game
+        -- makes no other window until it is gone, so the setup is asked for again each frame (main.lua) [H] up to 3 s
+        function go.reopen(cursor) go.reopen_cursor, go.reopen_at = cursor, cleria.time() end
+        go.open_setup = open_setup
         function go.start(mode)   -- "new" or "continue": connect (the room as the rows now say), wait
             go.on, go.at, go.mode = true, cleria.time(), mode
             local s = A.session.status

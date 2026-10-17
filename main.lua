@@ -683,6 +683,7 @@ cleria.events.on("frame", function()
     -- lit (300), and what the opening hands over (Yunica, Hugo: the Boost 187, 229, the Crystal 84, the Lila
     -- Shell 85; Toal: 229, the Dark Crystal 86). A random start's warp then follows as after any new game.
     local go = A.new_game
+    if go and go.reopen_cursor and (go.open_setup(go.reopen_cursor) or now - go.reopen_at > 3) then go.reopen_cursor = nil end
     if go and go.on then
         local s = A.session.status
         if s == "connected" and A.logic.configured and not A.want_profile then
